@@ -159,6 +159,12 @@ composer check   # Pint, PHPStan level 8, Pest
 
 The tests use mocked HTTP and need no network or token.
 
+One live test transcribes a real recording through the Actor (it costs a few cents). It is skipped unless `APIFY_LIVE_TEST=1` is set and a token is present in `APIFY_API_TOKEN` or `APIFY_TOKEN`. The sample file is fetched on the first run and kept in the system temp directory.
+
+```bash
+APIFY_LIVE_TEST=1 APIFY_API_TOKEN=your_token composer test -- tests/LiveTest.php
+```
+
 ## FAQ
 
 ### How do I transcribe an audio file with PHP?
