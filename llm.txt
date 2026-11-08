@@ -1,0 +1,57 @@
+# Audio Transcription PHP
+
+> PHP client for audio and video transcription (speech to text, SRT/VTT subtitles) via Apify, returns typed DTOs.
+
+Key facts:
+- Package: `bitesizedinsights/audio-transcription`
+- Install: `composer require bitesizedinsights/audio-transcription`
+- PHP: ^8.3, Guzzle ^7
+- Namespace: `AudioTranscription`
+- Entry class: `AudioTranscription\Client`
+- Auth: Apify API token, passed as first constructor argument
+
+## Docs
+- [README](https://github.com/bitesizedinsights/audio-transcription-php/blob/master/README.md): usage
+- [Actor](https://apify.com/bite-sized-insights/transcription): the underlying Apify Actor
+
+## API
+- `Client::__construct(string $apiToken, ?Config $config = null, ?GuzzleHttp\ClientInterface $http = null)`
+- `Client::transcribe(array $urls, Language $language = Language::Auto, bool $translateToEnglish = false, array $subtitleFormats = [], bool $diarize = false, ?int $numSpeakers = null, int $maxMinutesPerFile = 60, bool $withSummary = false, bool $withTags = false, bool $with5w1h = false, bool $withSentiment = false): Transcript[]` - starts one run for all URLs (1-100), waits for it, returns one Transcript per URL
+- `Config(string $apiToken, string $actorId = 'bite-sized-insights/transcription', string $baseUrl = 'https://api.apify.com/v2', int $timeout = 600, int $requestTimeout = 90)`
+- DTOs (all `final readonly`, `fromArray(array)`):
+  - `Transcript`: url: string, status: TranscriptStatus, translated: bool, transcribedSeconds: float, minutesTranscribed: int, truncated: bool, segments: Segment[], language: ?string, languageProbability: ?float, durationSeconds: ?float, text: ?string, speakers: ?int, diarization: ?DiarizationStatus, srt: ?string, vtt: ?string, errorCode: ?string, error: ?string, summary: ?Summary, tags: ?Tags, fiveW1h: ?array, sentiment: ?SentimentResult, analysisTruncated: bool; helpers isSuccessful(), isPartial(), isFailed(), getErrorCode(): ?ErrorCode, getSummaryText(): ?string, getTags(): string[], getSentiment(): ?Sentiment, getSegmentCount(): int
+  - `Segment`: id: int, start: float, end: float, text: string; helper getDuration(): float
+  - `Summary`: summary: string, originalLength: ?int, summaryLength: ?int, compressionRatio: ?float
+  - `Tags`: tags: string[], count: int
+  - `SentimentResult`: sentiment: ?Sentiment, confidence: ?float
+- Enums:
+  - `Language`: Auto ('auto') plus 100 languages, e.g. English ('en'), German ('de'), Cantonese ('yue')
+  - `SubtitleFormat`: Srt ('srt'), Vtt ('vtt')
+  - `TranscriptStatus`: Success, Partial, Failed
+  - `DiarizationStatus`: Ok, SkippedTime, Failed
+  - `ErrorCode`: BlockedUrl, DownloadFailed, TooLarge, UnsupportedFormat, InvalidMedia, NoAudio, TooLong, NoSpeech, TranscriptionFailed, ServiceUnavailable
+  - `Sentiment`: Positive, Neutral, Negative
+- Exceptions:
+  - `RateLimitException` (extends ApiException, has `retryAfter` seconds): HTTP 429
+  - `ApiException`: other HTTP errors, connection failures, malformed JSON, run status FAILED/ABORTED/TIMED-OUT, run not finished within Config::$timeout, missing dataset ID, unmappable dataset item (message names the index)
+  - A file that cannot be transcribed does not throw; its Transcript has status Failed with errorCode and error
+
+## Example
+
+```php
+<?php
+
+use AudioTranscription\Client;
+use AudioTranscription\SubtitleFormat;
+
+$client = new Client(getenv('APIFY_TOKEN'));
+
+$transcripts = $client->transcribe(
+    urls: ['https://example.com/podcast.mp3'],
+    subtitleFormats: [SubtitleFormat::Srt],
+);
+
+foreach ($transcripts as $transcript) {
+    echo $transcript->isSuccessful() ? $transcript->text : $transcript->error, "\n";
+}
+```
