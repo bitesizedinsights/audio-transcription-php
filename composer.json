@@ -1,0 +1,70 @@
+{
+    "name": "bitesizedinsights/audio-transcription",
+    "description": "Audio transcription PHP client: speech to text, SRT and VTT subtitles via Apify, typed DTOs.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "audio transcription",
+        "speech to text",
+        "transcription",
+        "video transcription",
+        "subtitles",
+        "srt",
+        "vtt",
+        "whisper",
+        "speaker diarization",
+        "translation",
+        "php",
+        "apify",
+        "api client"
+    ],
+    "homepage": "https://github.com/bitesizedinsights/audio-transcription-php",
+    "support": {
+        "issues": "https://github.com/bitesizedinsights/audio-transcription-php/issues",
+        "source": "https://github.com/bitesizedinsights/audio-transcription-php"
+    },
+    "authors": [
+        {
+            "name": "bite-sized-insights",
+            "homepage": "https://apify.com/bite-sized-insights"
+        }
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.3",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.0",
+        "pestphp/pest": "^4.0",
+        "phpstan/phpstan": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "AudioTranscription\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "AudioTranscription\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "cs": "pint --test",
+        "cs:fix": "pint",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "check": [
+            "@cs",
+            "@analyse",
+            "@test"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}
