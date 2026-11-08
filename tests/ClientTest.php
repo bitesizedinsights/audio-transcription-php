@@ -5,6 +5,7 @@ declare(strict_types=1);
 use AudioTranscription\Client;
 use AudioTranscription\Config;
 use AudioTranscription\Exception\ApiException;
+use AudioTranscription\Exception\MissingApiKeyException;
 use AudioTranscription\Exception\RateLimitException;
 use AudioTranscription\Language;
 use AudioTranscription\SubtitleFormat;
@@ -119,7 +120,7 @@ test('waits for a running run until it succeeds', function () {
 });
 
 test('throws when the run does not finish in time', function () {
-    $client = makeClient([runResponse('RUNNING')], config: new Config('t', timeout: 0));
+    $client = makeClient([runResponse('RUNNING')], config: new Config(timeout: 0));
 
     expect(fn () => $client->transcribe(['https://example.com/a.mp3']))
         ->toThrow(ApiException::class, 'did not finish within 0 seconds');
@@ -234,7 +235,7 @@ test('non-object dataset item names its index', function () {
 
 test('custom config changes actor, base url and request timeout', function () {
     $history = [];
-    $config = new Config('other-token', 'acme/custom', 'https://proxy.example.com/v2/', requestTimeout: 5);
+    $config = new Config('acme/custom', 'https://proxy.example.com/v2/', requestTimeout: 5);
     $client = makeClient([runResponse(), jsonResponse(200, [])], $history, $config);
 
     $client->transcribe(['https://example.com/a.mp3']);
@@ -242,9 +243,57 @@ test('custom config changes actor, base url and request timeout', function () {
     $request = $history[0]['request'];
     expect($request->getUri()->getHost())->toBe('proxy.example.com')
         ->and($request->getUri()->getPath())->toBe('/v2/acts/acme~custom/runs')
-        ->and($request->getHeaderLine('Authorization'))->toBe('Bearer other-token');
+        ->and($request->getHeaderLine('Authorization'))->toBe('Bearer test-token');
 });
 
 test('client works with its default HTTP client', function () {
-    expect(new Client('token'))->toBeInstanceOf(Client::class);
+    expect(new Client)->toBeInstanceOf(Client::class);
+});
+
+test('setApifyKey is fluent and sets the bearer token', function () {
+    $history = [];
+    $client = makeClient([runResponse(), jsonResponse(200, [])], $history, apiKey: null);
+
+    expect($client->setApifyKey('my-key'))->toBe($client);
+
+    $client->transcribe(['https://example.com/a.mp3']);
+
+    expect($history[0]['request']->getHeaderLine('Authorization'))->toBe('Bearer my-key');
+});
+
+test('falls back to the APIFY_API_TOKEN and APIFY_TOKEN environment variables', function () {
+    $previous = [getenv('APIFY_API_TOKEN'), getenv('APIFY_TOKEN')];
+
+    try {
+        putenv('APIFY_API_TOKEN');
+        putenv('APIFY_TOKEN=env-token-2');
+        $history = [];
+        makeClient([runResponse(), jsonResponse(200, [])], $history, apiKey: null)->transcribe(['https://example.com/a.mp3']);
+        expect($history[0]['request']->getHeaderLine('Authorization'))->toBe('Bearer env-token-2');
+
+        putenv('APIFY_API_TOKEN=env-token-1');
+        $history = [];
+        makeClient([runResponse(), jsonResponse(200, [])], $history, apiKey: null)->transcribe(['https://example.com/a.mp3']);
+        expect($history[0]['request']->getHeaderLine('Authorization'))->toBe('Bearer env-token-1');
+    } finally {
+        putenv($previous[0] === false ? 'APIFY_API_TOKEN' : 'APIFY_API_TOKEN='.$previous[0]);
+        putenv($previous[1] === false ? 'APIFY_TOKEN' : 'APIFY_TOKEN='.$previous[1]);
+    }
+});
+
+test('throws MissingApiKeyException when no key is set anywhere', function () {
+    $previous = [getenv('APIFY_API_TOKEN'), getenv('APIFY_TOKEN')];
+
+    try {
+        putenv('APIFY_API_TOKEN');
+        putenv('APIFY_TOKEN');
+        $history = [];
+        $client = makeClient([], $history, apiKey: null);
+
+        expect(fn () => $client->transcribe(['https://example.com/a.mp3']))->toThrow(MissingApiKeyException::class)
+            ->and($history)->toBeEmpty();
+    } finally {
+        putenv($previous[0] === false ? 'APIFY_API_TOKEN' : 'APIFY_API_TOKEN='.$previous[0]);
+        putenv($previous[1] === false ? 'APIFY_TOKEN' : 'APIFY_TOKEN='.$previous[1]);
+    }
 });

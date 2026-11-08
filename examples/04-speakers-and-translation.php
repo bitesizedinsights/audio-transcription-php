@@ -8,7 +8,7 @@ use AudioTranscription\Client;
 
 $apiToken = getenv('APIFY_API_TOKEN') ?: getenv('APIFY_TOKEN') ?: 'your_apify_api_token';
 
-$client = new Client($apiToken);
+$client = (new Client)->setApifyKey($apiToken);
 
 // Label speakers (SPEAKER_00, ...) and return an English translation of non-English speech
 $transcripts = $client->transcribe(

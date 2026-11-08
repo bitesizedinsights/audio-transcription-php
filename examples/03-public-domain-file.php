@@ -29,7 +29,7 @@ if (! is_file($localFile) || filesize($localFile) === 0) {
 printf("Local copy: %s (%d KB)\n", $localFile, filesize($localFile) / 1024);
 
 // The Actor reads public URLs, so send the source URL rather than the local file
-$client = new Client($apiToken);
+$client = (new Client)->setApifyKey($apiToken);
 [$transcript] = $client->transcribe([$sourceUrl], language: Language::English);
 
 if ($transcript->isFailed()) {

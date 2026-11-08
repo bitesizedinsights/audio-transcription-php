@@ -10,7 +10,7 @@ use AudioTranscription\SubtitleFormat;
 
 $apiToken = getenv('APIFY_API_TOKEN') ?: getenv('APIFY_TOKEN') ?: 'your_apify_api_token';
 
-$client = new Client($apiToken);
+$client = (new Client)->setApifyKey($apiToken);
 
 $transcripts = $client->transcribe(
     urls: ['https://upload.wikimedia.org/wikipedia/commons/d/dd/Armstrong_Small_Step.ogg'],

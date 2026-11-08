@@ -46,10 +46,12 @@ function runResponse(string $status = 'SUCCEEDED', string $id = 'run1', ?string 
  * @param  list<Response|Throwable>  $responses
  * @param  array<int, array<string, mixed>>  $history
  */
-function makeClient(array $responses, array &$history = [], ?Config $config = null): Client
+function makeClient(array $responses, array &$history = [], ?Config $config = null, ?string $apiKey = 'test-token'): Client
 {
     $stack = HandlerStack::create(new MockHandler($responses));
     $stack->push(Middleware::history($history));
 
-    return new Client('test-token', $config, new HttpClient(['handler' => $stack]));
+    $client = new Client($config, new HttpClient(['handler' => $stack]));
+
+    return $apiKey === null ? $client : $client->setApifyKey($apiKey);
 }

@@ -8,7 +8,7 @@ use AudioTranscription\Client;
 
 $apiToken = getenv('APIFY_API_TOKEN') ?: getenv('APIFY_TOKEN') ?: 'your_apify_api_token';
 
-$client = new Client($apiToken);
+$client = (new Client)->setApifyKey($apiToken);
 
 // Public domain recording: Neil Armstrong, Apollo 11 (NASA, via Wikimedia Commons)
 $transcripts = $client->transcribe(['https://upload.wikimedia.org/wikipedia/commons/d/dd/Armstrong_Small_Step.ogg']);

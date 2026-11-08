@@ -8,7 +8,7 @@ use AudioTranscription\Client;
 
 $apiToken = getenv('APIFY_API_TOKEN') ?: getenv('APIFY_TOKEN') ?: 'your_apify_api_token';
 
-$client = new Client($apiToken);
+$client = (new Client)->setApifyKey($apiToken);
 
 // Add-ons are billed per transcribed minute
 $transcripts = $client->transcribe(

@@ -11,7 +11,6 @@ final readonly class Config
      * @param  int  $requestTimeout  Timeout in seconds of a single HTTP request.
      */
     public function __construct(
-        public string $apiToken,
         public string $actorId = 'bite-sized-insights/transcription',
         public string $baseUrl = 'https://api.apify.com/v2',
         public int $timeout = 600,

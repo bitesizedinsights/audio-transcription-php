@@ -8,16 +8,17 @@ Key facts:
 - PHP: ^8.3, Guzzle ^7
 - Namespace: `AudioTranscription`
 - Entry class: `AudioTranscription\Client`
-- Auth: Apify API token, passed as first constructor argument
+- Auth: Apify API token, set via `Client::setApifyKey()`, falls back to env `APIFY_API_TOKEN` or `APIFY_TOKEN`
 
 ## Docs
 - [README](https://github.com/bitesizedinsights/audio-transcription-php/blob/master/README.md): usage
 - [Actor](https://apify.com/bite-sized-insights/transcription): the underlying Apify Actor
 
 ## API
-- `Client::__construct(string $apiToken, ?Config $config = null, ?GuzzleHttp\ClientInterface $http = null)`
+- `Client::__construct(?Config $config = null, ?GuzzleHttp\ClientInterface $http = null)`
+- `Client::setApifyKey(string $apiKey): static` - sets the Apify API key; without it `APIFY_API_TOKEN` or `APIFY_TOKEN` is read from the environment, and `MissingApiKeyException` is thrown on the first API call if neither is set
 - `Client::transcribe(array $urls, Language $language = Language::Auto, bool $translateToEnglish = false, array $subtitleFormats = [], bool $diarize = false, ?int $numSpeakers = null, int $maxMinutesPerFile = 60, bool $withSummary = false, bool $withTags = false, bool $with5w1h = false, bool $withSentiment = false): Transcript[]` - starts one run for all URLs (1-100), waits for it, returns one Transcript per URL
-- `Config(string $apiToken, string $actorId = 'bite-sized-insights/transcription', string $baseUrl = 'https://api.apify.com/v2', int $timeout = 600, int $requestTimeout = 90)`
+- `Config(string $actorId = 'bite-sized-insights/transcription', string $baseUrl = 'https://api.apify.com/v2', int $timeout = 600, int $requestTimeout = 90)`
 - DTOs (all `final readonly`, `fromArray(array)`):
   - `Transcript`: url: string, status: TranscriptStatus, translated: bool, transcribedSeconds: float, minutesTranscribed: int, truncated: bool, segments: Segment[], language: ?string, languageProbability: ?float, durationSeconds: ?float, text: ?string, speakers: ?int, diarization: ?DiarizationStatus, srt: ?string, vtt: ?string, errorCode: ?string, error: ?string, summary: ?Summary, tags: ?Tags, fiveW1h: ?array, sentiment: ?SentimentResult, analysisTruncated: bool; helpers isSuccessful(), isPartial(), isFailed(), getErrorCode(): ?ErrorCode, getSummaryText(): ?string, getTags(): string[], getSentiment(): ?Sentiment, getSegmentCount(): int
   - `Segment`: id: int, start: float, end: float, text: string; helper getDuration(): float
@@ -44,7 +45,7 @@ Key facts:
 use AudioTranscription\Client;
 use AudioTranscription\SubtitleFormat;
 
-$client = new Client(getenv('APIFY_TOKEN'));
+$client = (new Client())->setApifyKey(getenv('APIFY_TOKEN'));
 
 $transcripts = $client->transcribe(
     urls: ['https://example.com/podcast.mp3'],

@@ -24,7 +24,7 @@ use AudioTranscription\Client;
 
 $apiToken = getenv('APIFY_API_TOKEN') ?: getenv('APIFY_TOKEN') ?: 'your_apify_api_token';
 
-$client = new Client($apiToken);
+$client = (new Client())->setApifyKey($apiToken);
 
 $transcripts = $client->transcribe(['https://example.com/podcast.mp3']);
 
@@ -42,6 +42,8 @@ foreach ($transcripts as $transcript) {
     }
 }
 ```
+
+The API key is set with `setApifyKey()`. If you skip it, the client reads `APIFY_API_TOKEN` or `APIFY_TOKEN` from the environment and throws `MissingApiKeyException` on the first API call when neither is set.
 
 You need an Apify account ([sign up](https://console.apify.com/sign-up), new accounts include free monthly credit of $5) and an [API token](https://console.apify.com/account/integrations). Transcription costs from $0.01 per audio minute, see [Pricing](#pricing-cost-per-minute-of-audio).
 
@@ -169,14 +171,13 @@ Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`,
 use AudioTranscription\Client;
 use AudioTranscription\Config;
 
-$client = new Client('token', new Config(
-    apiToken: 'token',
+$client = (new Client(new Config(
     timeout: 1800,       // maximum seconds to wait for a run
     requestTimeout: 90,  // timeout of a single HTTP request
-));
+)))->setApifyKey($apiToken);
 ```
 
-`Config` also accepts `actorId` (default `bite-sized-insights/transcription`) and `baseUrl` (default `https://api.apify.com/v2`). A custom Guzzle client can be passed as third constructor argument, which is handy for tests and proxies.
+`Config` also accepts `actorId` (default `bite-sized-insights/transcription`) and `baseUrl` (default `https://api.apify.com/v2`). A custom Guzzle client can be passed as second constructor argument, which is handy for tests and proxies.
 
 ## Error Handling for Failed Transcriptions
 
@@ -193,6 +194,7 @@ try {
 }
 ```
 
+- `MissingApiKeyException` (extends `ApiException`): no key via `setApifyKey()` and neither `APIFY_API_TOKEN` nor `APIFY_TOKEN` is set.
 - `RateLimitException` (extends `ApiException`) is thrown on HTTP 429 and carries `retryAfter` in seconds.
 - `ApiException` is thrown for other HTTP errors, connection failures, malformed responses, runs that end as `FAILED`, `ABORTED` or `TIMED-OUT`, runs that do not finish within `Config::$timeout`, and dataset items that cannot be mapped (the message names the item index).
 - A single file that cannot be transcribed does not throw: its `Transcript` has status `Failed` with `errorCode` and `error`.

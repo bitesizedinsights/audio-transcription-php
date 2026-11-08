@@ -59,7 +59,7 @@ test('live: transcribes a real recording', function () {
     $token = liveToken();
     assert($token !== null);
 
-    $client = new Client($token, new Config(apiToken: $token, timeout: 600));
+    $client = (new Client(new Config(timeout: 600)))->setApifyKey($token);
 
     $result = $client->transcribe(
         urls: [LIVE_SAMPLE_URL],
