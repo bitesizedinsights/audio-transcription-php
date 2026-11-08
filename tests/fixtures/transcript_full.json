@@ -1,0 +1,30 @@
+{
+    "url": "https://example.com/podcast.mp3",
+    "status": "success",
+    "language": "en",
+    "language_probability": 0.99,
+    "translated": false,
+    "duration_seconds": 84.3,
+    "transcribed_seconds": 84.3,
+    "minutes_transcribed": 2,
+    "truncated": false,
+    "text": "Welcome to the show. Today we talk about timestamps.",
+    "segments": [
+        {"id": 0, "start": 0.0, "end": 2.4, "text": "Welcome to the show."},
+        {"id": 1, "start": 2.9, "end": 6.1, "text": "Today we talk about timestamps."}
+    ],
+    "speakers": 2,
+    "diarization": "ok",
+    "srt": "1\n00:00:00,000 --> 00:00:02,400\nWelcome to the show.\n\n2\n00:00:02,900 --> 00:00:06,100\nToday we talk about timestamps.\n",
+    "vtt": null,
+    "error_code": null,
+    "error": null,
+    "summary": {
+        "summary": "A short welcome and an introduction to timestamps.",
+        "stats": {"original_length": 52, "summary_length": 50, "compression_ratio": 0.9615}
+    },
+    "tags": {"tags": ["podcast", "timestamps"], "count": 2},
+    "five_w1h": {"who": {"value": "host", "confidence": 0.7}},
+    "sentiment": {"sentiment": "positive", "confidence": 0.82},
+    "analysis_truncated": false
+}

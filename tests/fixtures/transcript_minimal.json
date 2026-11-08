@@ -1,0 +1,9 @@
+{
+    "url": "https://example.com/clip.wav",
+    "status": "partial",
+    "translated": true,
+    "transcribed_seconds": 30,
+    "minutes_transcribed": 1,
+    "truncated": true,
+    "segments": []
+}
