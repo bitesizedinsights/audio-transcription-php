@@ -150,6 +150,21 @@ try {
 - `ApiException` is thrown for other HTTP errors, connection failures, malformed responses, runs that end as `FAILED`, `ABORTED` or `TIMED-OUT`, runs that do not finish within `Config::$timeout`, and dataset items that cannot be mapped (the message names the item index).
 - A single file that cannot be transcribed does not throw: its `Transcript` has status `Failed` with `errorCode` and `error`.
 
+## Examples
+
+Runnable scripts in [`examples/`](examples/); each starts with `$apiToken` (read from `APIFY_API_TOKEN` or `APIFY_TOKEN`):
+
+- `01-basic.php`: transcribe a public domain recording
+- `02-subtitles.php`: save SRT and WebVTT files
+- `03-public-domain-file.php`: fetch a public domain file (Apollo 11, NASA) to the temp directory, then print timestamped segments
+- `04-speakers-and-translation.php`: speaker labels and English translation
+- `05-analysis-addons.php`: summary, tags and sentiment
+- `06-error-handling.php`: exceptions and failed files
+
+```bash
+APIFY_API_TOKEN=your_token php examples/01-basic.php
+```
+
 ## Testing
 
 ```bash
