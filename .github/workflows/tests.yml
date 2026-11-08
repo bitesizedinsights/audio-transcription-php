@@ -5,17 +5,29 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      live:
+        description: 'Also run the live test against the Apify Actor (uses the APIFY_API_TOKEN secret, costs a few cents)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   tests:
     runs-on: ubuntu-latest
+    name: PHP ${{ matrix.php }}
 
     strategy:
       fail-fast: false
       matrix:
         php: ['8.3', '8.4']
-
-    name: PHP ${{ matrix.php }}
 
     steps:
       - name: Checkout code
@@ -27,6 +39,21 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: mbstring, json, curl
           coverage: none
+          tools: composer:v2
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ hashFiles('composer.json') }}
+          restore-keys: composer-${{ runner.os }}-php${{ matrix.php }}-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -48,6 +75,7 @@ jobs:
           php-version: '8.3'
           extensions: mbstring
           coverage: none
+          tools: composer:v2
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -69,9 +97,38 @@ jobs:
           php-version: '8.3'
           extensions: mbstring
           coverage: none
+          tools: composer:v2
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Run PHPStan
         run: composer analyse
+
+  live:
+    # Manual only: run via "Run workflow" with live=true. Never on push or pull requests.
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    runs-on: ubuntu-latest
+    name: Live test
+    needs: [tests]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, json, curl
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run live test
+        env:
+          APIFY_LIVE_TEST: '1'
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+        run: composer test -- tests/LiveTest.php

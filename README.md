@@ -165,6 +165,8 @@ One live test transcribes a real recording through the Actor (it costs a few cen
 APIFY_LIVE_TEST=1 APIFY_API_TOKEN=your_token composer test -- tests/LiveTest.php
 ```
 
+On GitHub Actions the tests, Pint and PHPStan run on every push and pull request (PHP 8.3 and 8.4). The live test runs only when triggered manually: add an `APIFY_API_TOKEN` repository secret, then use "Run workflow" on the Tests workflow with `live` ticked.
+
 ## FAQ
 
 ### How do I transcribe an audio file with PHP?
