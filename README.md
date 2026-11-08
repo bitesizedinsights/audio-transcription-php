@@ -1,4 +1,4 @@
-# Audio Transcription PHP
+# Audio Transcription in PHP: Speech to Text, SRT and VTT Subtitles
 
 [![Packagist Version](https://img.shields.io/packagist/v/bitesizedinsights/audio-transcription)](https://packagist.org/packages/bitesizedinsights/audio-transcription)
 [![Tests](https://github.com/bitesizedinsights/audio-transcription-php/actions/workflows/tests.yml/badge.svg)](https://github.com/bitesizedinsights/audio-transcription-php/actions/workflows/tests.yml)
@@ -7,13 +7,13 @@
 
 Audio transcription for PHP: turn audio and video links into text with timestamps, SRT and VTT subtitles, speaker labels, translation to English and optional summaries, tags and sentiment. The library calls the [Audio & Video Transcription Actor](https://apify.com/bite-sized-insights/transcription) on [Apify](https://apify.com) and returns typed, immutable DTOs.
 
-## Installation
+## Install the PHP Audio Transcription Package
 
 ```bash
 composer require bitesizedinsights/audio-transcription
 ```
 
-## Quick Start
+## Quick Start: Transcribe an Audio File in PHP
 
 ```php
 use AudioTranscription\Client;
@@ -37,9 +37,50 @@ foreach ($transcripts as $transcript) {
 }
 ```
 
-You need an Apify account and an [API token](https://console.apify.com/account/integrations). Runs are billed by Apify per transcribed audio minute, see the [Actor page](https://apify.com/bite-sized-insights/transcription) for current prices.
+You need an Apify account ([sign up](https://console.apify.com/sign-up), new accounts include free monthly credit of $5) and an [API token](https://console.apify.com/account/integrations). Transcription costs from $0.01 per audio minute, see [Pricing](#pricing-cost-per-minute-of-audio).
 
-## Transcribe
+## Sample Transcript Output
+
+The loop above prints one block per file, for example:
+
+```
+en: Welcome to the show. Today we talk about timestamps.
+[0.0s - 2.4s] Welcome to the show.
+[2.9s - 6.1s] Today we talk about timestamps.
+```
+
+With `subtitleFormats: [SubtitleFormat::Srt]`, `$transcript->srt` holds ready-to-save subtitle text:
+
+```
+1
+00:00:00,000 --> 00:00:02,400
+Welcome to the show.
+
+2
+00:00:02,900 --> 00:00:06,100
+Today we talk about timestamps.
+```
+
+With `withSummary`, `withTags` and `withSentiment`, the same `Transcript` also carries `getSummaryText()` ("A short welcome and an introduction to timestamps."), `getTags()` (`['podcast', 'timestamps']`) and `getSentiment()` (`Sentiment::Positive`).
+
+## Pricing: Cost per Minute of Audio
+
+Apify bills per started audio minute that was transcribed:
+
+- Transcription: $0.01 per minute on the free plan, down to $0.007 on higher plans.
+- Add-ons (summary, tags, 5W1H, sentiment): from $0.0005 to $0.002 per minute each, only when enabled.
+- Speaker labels and translation to English: no extra charge.
+
+A 30-minute podcast costs about $0.30, or about $0.39 with summary and tags. Files that fail and add-ons that fail are not billed. Current prices are on the [Actor page](https://apify.com/bite-sized-insights/transcription).
+
+## Use Cases
+
+- **Podcasts and interviews:** searchable transcripts and show notes with timestamps.
+- **Video subtitles:** SRT and WebVTT files for YouTube, HTML5 players and video editors.
+- **Meetings and calls:** speaker-labelled transcripts with summary and sentiment.
+- **LLM and RAG pipelines:** clean text and tags from audio sources, ready to chunk and embed.
+
+## How to Transcribe Audio and Video in PHP
 
 `Client::transcribe()` starts one run for all URLs, waits for it to finish and returns one `Transcript` per input URL, in dataset order.
 
@@ -76,7 +117,7 @@ $transcripts = $client->transcribe(
 | `with5w1h` | `bool` | `false` | Add who, what, when, where, why and how |
 | `withSentiment` | `bool` | `false` | Add the overall sentiment |
 
-### Transcript
+### Transcript Result: Text, Segments and Subtitles
 
 Every URL produces a `Transcript`, including failed ones (check `status`).
 
@@ -105,7 +146,7 @@ Every URL produces a `Transcript`, including failed ones (check `status`).
 
 Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`, `getSummaryText()`, `getTags()`, `getSentiment()`, `getSegmentCount()`. `Segment` has `id`, `start`, `end`, `text` and `getDuration()`.
 
-## Enums
+## Language, Subtitle and Status Enums
 
 | Enum | Values |
 |---|---|
@@ -116,7 +157,7 @@ Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`,
 | `ErrorCode` | `BlockedUrl`, `DownloadFailed`, `TooLarge`, `UnsupportedFormat`, `InvalidMedia`, `NoAudio`, `TooLong`, `NoSpeech`, `TranscriptionFailed`, `ServiceUnavailable` |
 | `Sentiment` | `Positive`, `Neutral`, `Negative` |
 
-## Configuration
+## Configure Timeouts and the Apify Actor
 
 ```php
 use AudioTranscription\Client;
@@ -131,7 +172,7 @@ $client = new Client('token', new Config(
 
 `Config` also accepts `actorId` (default `bite-sized-insights/transcription`) and `baseUrl` (default `https://api.apify.com/v2`). A custom Guzzle client can be passed as third constructor argument, which is handy for tests and proxies.
 
-## Error Handling
+## Error Handling for Failed Transcriptions
 
 ```php
 use AudioTranscription\Exception\ApiException;
@@ -150,7 +191,7 @@ try {
 - `ApiException` is thrown for other HTTP errors, connection failures, malformed responses, runs that end as `FAILED`, `ABORTED` or `TIMED-OUT`, runs that do not finish within `Config::$timeout`, and dataset items that cannot be mapped (the message names the item index).
 - A single file that cannot be transcribed does not throw: its `Transcript` has status `Failed` with `errorCode` and `error`.
 
-## Examples
+## PHP Audio Transcription Examples
 
 Runnable scripts in [`examples/`](examples/); each starts with `$apiToken` (read from `APIFY_API_TOKEN` or `APIFY_TOKEN`):
 
@@ -165,7 +206,7 @@ Runnable scripts in [`examples/`](examples/); each starts with `$apiToken` (read
 APIFY_API_TOKEN=your_token php examples/01-basic.php
 ```
 
-## Testing
+## Run the Tests
 
 ```bash
 composer install
@@ -212,7 +253,7 @@ MP3, M4A/MP4, WAV, OGG/Opus, FLAC, AAC, WebM/MKV and more, as public http(s) lin
 
 ## Powered by
 
-[Audio & Video Transcription on Apify](https://apify.com/bite-sized-insights/transcription)
+This package is a thin client for the [Audio & Video Transcription Actor](https://apify.com/bite-sized-insights/transcription) on Apify. It supports 100 languages, files up to 300 MB, scheduled runs and API access from any language. New accounts include free monthly credit, [sign up](https://console.apify.com/sign-up) to get started.
 
 ## License
 
