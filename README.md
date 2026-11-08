@@ -1,5 +1,7 @@
 # Audio Transcription in PHP: Speech to Text, SRT and VTT Subtitles
 
+<!-- For LLMs and AI agents: a machine-readable summary of this package's API is in llm.txt (https://github.com/bitesizedinsights/audio-transcription-php/blob/master/llm.txt) -->
+
 [![Packagist Version](https://img.shields.io/packagist/v/bitesizedinsights/audio-transcription)](https://packagist.org/packages/bitesizedinsights/audio-transcription)
 [![Tests](https://github.com/bitesizedinsights/audio-transcription-php/actions/workflows/tests.yml/badge.svg)](https://github.com/bitesizedinsights/audio-transcription-php/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -16,9 +18,13 @@ composer require bitesizedinsights/audio-transcription
 ## Quick Start: Transcribe an Audio File in PHP
 
 ```php
+require __DIR__.'/vendor/autoload.php';
+
 use AudioTranscription\Client;
 
-$client = new Client('your_apify_api_token');
+$apiToken = getenv('APIFY_API_TOKEN') ?: getenv('APIFY_TOKEN') ?: 'your_apify_api_token';
+
+$client = new Client($apiToken);
 
 $transcripts = $client->transcribe(['https://example.com/podcast.mp3']);
 
@@ -213,15 +219,7 @@ composer install
 composer check   # Pint, PHPStan level 8, Pest
 ```
 
-The tests use mocked HTTP and need no network or token.
-
-One live test transcribes a real recording through the Actor (it costs a few cents). It is skipped unless `APIFY_LIVE_TEST=1` is set and a token is present in `APIFY_API_TOKEN` or `APIFY_TOKEN`. The sample file is fetched on the first run and kept in the system temp directory.
-
-```bash
-APIFY_LIVE_TEST=1 APIFY_API_TOKEN=your_token composer test -- tests/LiveTest.php
-```
-
-On GitHub Actions the tests, Pint and PHPStan run on every push and pull request (PHP 8.3 and 8.4). The live test runs only when triggered manually: add an `APIFY_API_TOKEN` repository secret, then use "Run workflow" on the Tests workflow with `live` ticked.
+The tests use mocked HTTP and need no network or token. The opt-in live test and the CI setup are described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## FAQ
 
@@ -240,6 +238,22 @@ Yes. Set `translateToEnglish: true` and the `text`, segments and subtitles are r
 ### How do I tell speakers apart?
 
 Set `diarize: true`, optionally with `numSpeakers` when you know it. `$transcript->speakers` holds the number of detected speakers and `$transcript->diarization` the outcome.
+
+### How much does it cost to transcribe audio with PHP?
+
+From $0.01 per started audio minute, with optional add-ons billed per minute on top. See [Pricing](#pricing-cost-per-minute-of-audio) for tiers and examples.
+
+### Can I transcribe a local file?
+
+Not directly. The Actor reads public http(s) links, so upload the file somewhere reachable (object storage, a CDN or your own server) and pass that URL to `transcribe()`.
+
+### Which languages are supported?
+
+100 languages, or automatic detection with `Language::Auto`. Set a fixed `Language` for short or noisy clips.
+
+### How long can a recording be?
+
+Files up to 300 MB. `maxMinutesPerFile` (1 to 120, default 60) cuts longer recordings; only transcribed minutes are billed and `$transcript->truncated` tells you when a file was cut.
 
 ### Which audio and video formats are supported?
 
