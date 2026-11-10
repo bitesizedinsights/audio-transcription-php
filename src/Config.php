@@ -8,6 +8,10 @@ final readonly class Config
 {
     /**
      * @param  int  $timeout  Maximum seconds to wait for a run to finish.
+     * @param  int|null  $runTimeout  Apify's own time limit of the run in seconds, sent as the run's `timeout`. Null =
+     *                                the Actor's default (300 s), too short for podcast feeds and long recordings: a
+     *                                run that reaches it skips what it could not finish (`TranscriptStatus::Skipped`).
+     *                                Keep `$timeout` above it.
      * @param  int  $requestTimeout  Timeout in seconds of a single HTTP request.
      * @param  int  $maxRetries  How often a failed request is repeated (0 turns retrying off). Rate limits (429), server
      *                           errors (5xx) and connection failures are retried; see the README for the exact rules.
@@ -22,5 +26,6 @@ final readonly class Config
         public int $maxRetries = 3,
         public float $retryBaseDelay = 1.0,
         public float $retryMaxDelay = 30.0,
+        public ?int $runTimeout = null,
     ) {}
 }

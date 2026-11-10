@@ -10,6 +10,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Added
 
+- Podcast feeds: `Client::transcribe()` accepts `feedUrls` and `maxEpisodesPerFeed` (and `urls` may be omitted). `Transcript` gets `minutesCached`, `message`, `sourceFeed`, `episodeTitle`, `episodePublished`, `episodeGuid`, `isSkipped()`, `needsRerun()` and `getEpisodePublishedAt()`; `TranscriptStatus::Skipped` and `ErrorCode::RunTimeLimit`, `InvalidFeed`, `NoEpisodes`.
+- `Config::$runTimeout` sets Apify's time limit of the run (the Actor's default of 300 s is too short for feeds).
 - `Transcript::chunks()` and the `Chunk` DTO: time-aware chunks for RAG with start, end, segment IDs and speakers, limits by seconds and characters, optional split on speaker change and pause, optional overlap. `Transcript::getChunkUrl()` links to the chunk start.
 - Automatic retrying with exponential backoff and jitter (`Config::$maxRetries`, `$retryBaseDelay`, `$retryMaxDelay`): rate limits honour `Retry-After`, 5xx and connection failures are retried, and starting a run is not repeated after a 5xx or timeout.
 - Convenience helpers: `Segment::getTimestamp()`, `Transcript::getSegmentUrl()`, `Transcript::getTimestampedText()`, `Transcript::saveSrt()` and `Transcript::saveVtt()`.

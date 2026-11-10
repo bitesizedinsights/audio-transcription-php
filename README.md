@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/php-%5E8.3-777bb4.svg)](composer.json)
 
-Audio transcription for PHP: turn audio and video links into text with timestamps, SRT and VTT subtitles, speaker labels, translation to English and optional summaries, tags and sentiment. The library calls the [Audio & Video Transcription Actor](https://apify.com/bite-sized-insights/transcription) on [Apify](https://apify.com) and returns typed, immutable DTOs.
+Audio transcription for PHP: turn audio and video links, or the newest episodes of podcast feeds, into text with timestamps, SRT and VTT subtitles, speaker labels, translation to English and optional summaries, tags and sentiment. The library calls the [Audio & Video Transcription Actor](https://apify.com/bite-sized-insights/transcription) on [Apify](https://apify.com) and returns typed, immutable DTOs.
 
 ## Install the PHP Audio Transcription Package
 
@@ -83,14 +83,14 @@ A 30-minute podcast costs about $0.30, or about $0.39 with summary and tags. Fil
 
 ## Use Cases
 
-- **Podcasts and interviews:** searchable transcripts and show notes with timestamps.
+- **Podcasts and interviews:** searchable transcripts and show notes with timestamps; pass a podcast feed and the newest episodes are transcribed.
 - **Video subtitles:** SRT and WebVTT files for YouTube, HTML5 players and video editors.
 - **Meetings and calls:** speaker-labelled transcripts with summary and sentiment.
 - **LLM and RAG pipelines:** clean text and tags from audio sources, ready to chunk and embed.
 
 ## How to Transcribe Audio and Video in PHP
 
-`Client::transcribe()` starts one run for all URLs, waits for it to finish and returns one `Transcript` per input URL, in dataset order.
+`Client::transcribe()` starts one run for all URLs and feeds, waits for it to finish and returns one `Transcript` per file in dataset order: the links first, then the episodes of each feed, newest first. A feed that cannot be read gives one failed `Transcript` under the feed's URL.
 
 ```php
 use AudioTranscription\Language;
@@ -113,7 +113,7 @@ $transcripts = $client->transcribe(
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `urls` | `list<string>` | required | Public http(s) links to audio or video files, 1 to 100, up to 300 MB each |
+| `urls` | `list<string>` | `[]` | Public http(s) links to audio or video files, up to 100, up to 300 MB each. Needed unless `feedUrls` is given |
 | `language` | `Language` | `Language::Auto` | Spoken language, or automatic detection |
 | `translateToEnglish` | `bool` | `false` | Return the transcript translated into English |
 | `subtitleFormats` | `list<SubtitleFormat>` | `[]` | Also return subtitles as `srt` and/or `vtt` text |
@@ -124,6 +124,8 @@ $transcripts = $client->transcribe(
 | `withTags` | `bool` | `false` | Add topic tags for each transcript |
 | `with5w1h` | `bool` | `false` | Add who, what, when, where, why and how |
 | `withSentiment` | `bool` | `false` | Add the overall sentiment |
+| `feedUrls` | `list<string>` | `[]` | RSS or Atom feeds of podcasts, up to 20. Their newest episodes are transcribed, see [Podcast Feeds](#podcast-feeds-time-limits-and-running-again) |
+| `maxEpisodesPerFeed` | `int` | `5` | Newest episodes per feed, 1 to 50. Links and episodes make at most 100 files per run |
 
 ### Transcript Result: Text, Segments and Subtitles
 
@@ -151,8 +153,12 @@ Every URL produces a `Transcript`, including failed ones (check `status`).
 | `fiveW1h` | `?array` | Who, what, when, where, why and how, when requested |
 | `sentiment` | `?SentimentResult` | Overall sentiment with confidence, when requested |
 | `analysisTruncated` | `bool` | True when only the beginning of a very long transcript was analysed |
+| `minutesCached` | `int` | Started audio minutes served from the result cache: billed by an earlier run, not billed again |
+| `message` | `?string` | What to do next for `Partial` and `Skipped` rows (run the same input again), otherwise null |
+| `sourceFeed` | `?string` | The podcast feed URL of an episode (also set on the row of a feed that could not be read), null for plain links |
+| `episodeTitle`, `episodePublished`, `episodeGuid` | `?string` | Episode details from the feed, null for plain links. `episodePublished` is ISO 8601 UTC |
 
-Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`, `getSummaryText()`, `getTags()`, `getSentiment()`, `getSegmentCount()`. `Segment` has `id`, `start`, `end`, `text`, `speaker` (`SPEAKER_00`, ...; `null` unless `diarize` is on) and `getDuration()`.
+Helper methods: `isSuccessful()`, `isPartial()`, `isSkipped()`, `isFailed()`, `needsRerun()` (partial or skipped), `getEpisodePublishedAt()`, `getErrorCode()`, `getSummaryText()`, `getTags()`, `getSentiment()`, `getSegmentCount()`. `Segment` has `id`, `start`, `end`, `text`, `speaker` (`SPEAKER_00`, ...; `null` unless `diarize` is on) and `getDuration()`.
 
 ### Chunks for RAG and Semantic Search
 
@@ -215,9 +221,9 @@ An unknown sentiment label from the service is read as `null` and stored as an e
 |---|---|
 | `Language` | `Auto` plus 100 languages, for example `English` (`en`), `German` (`de`), `Cantonese` (`yue`) |
 | `SubtitleFormat` | `Srt`, `Vtt` |
-| `TranscriptStatus` | `Success`, `Partial`, `Failed` |
+| `TranscriptStatus` | `Success`, `Partial`, `Skipped`, `Failed` |
 | `DiarizationStatus` | `Ok`, `SkippedTime`, `Failed` |
-| `ErrorCode` | `BlockedUrl`, `DownloadFailed`, `TooLarge`, `UnsupportedFormat`, `InvalidMedia`, `NoAudio`, `TooLong`, `NoSpeech`, `TranscriptionFailed`, `ServiceUnavailable` |
+| `ErrorCode` | `BlockedUrl`, `DownloadFailed`, `TooLarge`, `UnsupportedFormat`, `InvalidMedia`, `NoAudio`, `TooLong`, `NoSpeech`, `TranscriptionFailed`, `ServiceUnavailable`, `RunTimeLimit`, `InvalidFeed`, `NoEpisodes` |
 | `Sentiment` | `Positive`, `Neutral`, `Negative` |
 
 ## Configure Timeouts and the Apify Actor
@@ -232,7 +238,29 @@ $client = (new Client(new Config(
 )))->setApifyKey($apiToken);
 ```
 
-`Config` also accepts `actorId` (default `bite-sized-insights/transcription`) and `baseUrl` (default `https://api.apify.com/v2`). A custom Guzzle client can be passed as second constructor argument, which is handy for tests and proxies.
+`runTimeout` sets Apify's own time limit of the run (default: the Actor's, 300 s) and `timeout` is how long the client waits; keep `timeout` above `runTimeout`. `Config` also accepts `actorId` (default `bite-sized-insights/transcription`) and `baseUrl` (default `https://api.apify.com/v2`). A custom Guzzle client can be passed as second constructor argument, which is handy for tests and proxies.
+
+## Podcast Feeds, Time Limits and Running Again
+
+Pass the RSS or Atom address of a podcast (not a web page link) and the newest episodes are transcribed, each as its own `Transcript` with the episode title, publication time and guid:
+
+```php
+use AudioTranscription\Config;
+
+$client = (new Client(new Config(timeout: 3700, runTimeout: 3600)))->setApifyKey($apiToken);
+
+$transcripts = $client->transcribe(feedUrls: ['https://feeds.example.com/my-podcast.xml'], maxEpisodesPerFeed: 3);
+
+foreach ($transcripts as $transcript) {
+    echo $transcript->episodeTitle, ': ', $transcript->needsRerun() ? $transcript->message : 'done', "\n";
+}
+```
+
+An hour of audio takes about 8 to 20 minutes of run time, so a feed run needs a longer Apify time limit than the Actor's 300 s default: set `Config::$runTimeout`. The Actor never starts an episode it expects not to finish in time. Such episodes come back as `TranscriptStatus::Skipped` (`ErrorCode::RunTimeLimit`) with a `message`, and a recording that ran out of its own time budget as `Partial`.
+
+**Run the same call again to continue.** Finished work is cached for 90 days: files that were transcribed completely come back instantly, a `Partial` recording continues after the part that was finished, and `Skipped` files are transcribed now. Only newly computed minutes are billed (`minutesTranscribed`), audio served from the cache is reported in `minutesCached`. `needsRerun()` tells you whether another call is needed. The cache is shared across users and keyed by the file's content, language and translation settings; see the Actor's page for the retention details.
+
+Scheduled calls with the same feed only pay for new episodes.
 
 ## Retries and Backoff
 
@@ -279,6 +307,7 @@ Runnable scripts in [`examples/`](examples/); each starts with `$apiToken` (read
 - `05-analysis-addons.php`: summary, tags and sentiment
 - `06-error-handling.php`: exceptions and failed files
 - `07-rag-chunks.php`: speaker and pause aware chunks with time ranges and links, ready to embed
+- `08-podcast-feed.php`: transcribe the newest episodes of a podcast feed and detect when to run again
 
 ```bash
 APIFY_API_TOKEN=your_token php examples/01-basic.php
@@ -314,6 +343,14 @@ Set `diarize: true`, optionally with `numSpeakers` when you know it. `$transcrip
 ### How much does it cost to transcribe audio with PHP?
 
 From $0.01 per started audio minute, with optional add-ons billed per minute on top. See [Pricing](#pricing-cost-per-minute-of-audio) for tiers and examples.
+
+### Can I transcribe a podcast?
+
+Yes: pass its RSS or Atom address as `feedUrls` and set `Config::$runTimeout` high enough for the episodes, see [Podcast Feeds](#podcast-feeds-time-limits-and-running-again). Links to Apple Podcasts, Spotify or YouTube pages are not feeds.
+
+### A call returned `Partial` or `Skipped` rows, what now?
+
+Call `transcribe()` again with the same arguments. Finished work is cached for 90 days and is not billed twice.
 
 ### Can I transcribe a local file?
 

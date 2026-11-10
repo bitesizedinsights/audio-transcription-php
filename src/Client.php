@@ -60,7 +60,7 @@ final class Client
     /**
      * Transcribe audio or video files and return one result per URL.
      *
-     * @param  list<string>  $urls  Public http(s) links, 1 to 100, up to 300 MB each.
+     * @param  list<string>  $urls  Public http(s) links, up to 100, up to 300 MB each. Needed unless `$feedUrls` is given.
      * @param  Language  $language  Spoken language; `Language::Auto` detects it.
      * @param  bool  $translateToEnglish  Return the transcript translated into English.
      * @param  list<SubtitleFormat>  $subtitleFormats  Also return subtitles in these formats.
@@ -71,13 +71,16 @@ final class Client
      * @param  bool  $withTags  Add topic tags for each transcript.
      * @param  bool  $with5w1h  Add who, what, when, where, why and how of each transcript.
      * @param  bool  $withSentiment  Add the overall sentiment of each transcript.
-     * @return list<Transcript>
+     * @param  list<string>  $feedUrls  RSS or Atom feeds of podcasts, up to 20: their newest episodes are transcribed too.
+     * @param  int  $maxEpisodesPerFeed  Newest episodes per feed, 1 to 50. Links and episodes make at most 100 files.
+     * @return list<Transcript> One per file (and one failed row per feed that could not be read), links first.
      *
+     * @throws InvalidArgumentException when neither `$urls` nor `$feedUrls` is given, or `$maxEpisodesPerFeed` is out of range
      * @throws ApiException
      * @throws RateLimitException
      */
     public function transcribe(
-        array $urls,
+        array $urls = [],
         Language $language = Language::Auto,
         bool $translateToEnglish = false,
         array $subtitleFormats = [],
@@ -88,9 +91,19 @@ final class Client
         bool $withTags = false,
         bool $with5w1h = false,
         bool $withSentiment = false,
+        array $feedUrls = [],
+        int $maxEpisodesPerFeed = 5,
     ): array {
-        $input = [
-            'urls' => $urls,
+        if ($urls === [] && $feedUrls === []) {
+            throw new InvalidArgumentException('Pass at least one URL in $urls or one podcast feed in $feedUrls');
+        }
+
+        if ($maxEpisodesPerFeed < 1 || $maxEpisodesPerFeed > 50) {
+            throw new InvalidArgumentException('$maxEpisodesPerFeed must be between 1 and 50');
+        }
+
+        $input = $urls === [] ? [] : ['urls' => $urls];
+        $input += [
             'language' => $language->value,
             'maxMinutesPerFile' => $maxMinutesPerFile,
         ];
@@ -106,6 +119,8 @@ final class Client
             'withTags' => $withTags ?: null,
             'with5w1h' => $with5w1h ?: null,
             'withSentiment' => $withSentiment ?: null,
+            'feedUrls' => $feedUrls === [] ? null : $feedUrls,
+            'maxEpisodesPerFeed' => $feedUrls === [] ? null : $maxEpisodesPerFeed,
         ];
 
         foreach ($optional as $key => $value) {
@@ -127,7 +142,13 @@ final class Client
     private function startRun(array $input): array
     {
         $actor = str_replace('/', '~', $this->config->actorId);
-        $result = $this->request('POST', "/acts/{$actor}/runs", ['json' => $input]);
+        $options = ['json' => $input];
+
+        if ($this->config->runTimeout !== null) {
+            $options['query'] = ['timeout' => $this->config->runTimeout];
+        }
+
+        $result = $this->request('POST', "/acts/{$actor}/runs", $options);
 
         return $this->runData($result);
     }

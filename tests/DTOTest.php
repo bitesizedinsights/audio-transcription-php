@@ -229,3 +229,59 @@ test('saveSrt and saveVtt write the subtitles or explain what is missing', funct
     unlink("{$dir}/a.srt");
     rmdir($dir);
 });
+
+test('podcast episode fields are read and round trip', function () {
+    $t = Transcript::fromArray(loadFixture('transcript_episode'));
+
+    expect($t->sourceFeed)->toBe('https://feeds.example.com/show.xml')
+        ->and($t->episodeTitle)->toBe('Episode 12: Timestamps')
+        ->and($t->episodePublished)->toBe('2026-11-03T06:00:00Z')
+        ->and($t->episodeGuid)->toBe('ep-12')
+        ->and($t->minutesCached)->toBe(15)
+        ->and($t->minutesTranscribed)->toBe(10)
+        ->and($t->message)->toContain('Run the same input again')
+        ->and($t->isPartial())->toBeTrue()
+        ->and($t->needsRerun())->toBeTrue()
+        ->and($t->getEpisodePublishedAt()?->format('Y-m-d H:i'))->toBe('2026-11-03 06:00')
+        ->and(Transcript::fromArray($t->toArray()))->toEqual($t)
+        ->and(Transcript::fromArray(json_decode(json_encode($t), true)))->toEqual($t);
+});
+
+test('rows without feed fields default to null and zero', function () {
+    $t = Transcript::fromArray(loadFixture('transcript_full'));
+
+    expect($t->sourceFeed)->toBeNull()
+        ->and($t->episodeTitle)->toBeNull()
+        ->and($t->episodePublished)->toBeNull()
+        ->and($t->episodeGuid)->toBeNull()
+        ->and($t->message)->toBeNull()
+        ->and($t->minutesCached)->toBe(0)
+        ->and($t->needsRerun())->toBeFalse()
+        ->and($t->getEpisodePublishedAt())->toBeNull();
+});
+
+test('skipped rows are not failed and ask for a rerun', function () {
+    $t = Transcript::fromArray([
+        ...loadFixture('transcript_failed'),
+        'status' => 'skipped',
+        'error_code' => 'run_time_limit',
+        'error' => null,
+        'message' => 'Not started: the run\'s time limit was too close.',
+    ]);
+
+    expect($t->status)->toBe(TranscriptStatus::Skipped)
+        ->and($t->isSkipped())->toBeTrue()
+        ->and($t->isFailed())->toBeFalse()
+        ->and($t->needsRerun())->toBeTrue()
+        ->and($t->getErrorCode())->toBe(ErrorCode::RunTimeLimit);
+});
+
+test('feed error codes are known', function (string $code, ErrorCode $expected) {
+    expect(ErrorCode::tryFrom($code))->toBe($expected);
+})->with([['invalid_feed', ErrorCode::InvalidFeed], ['no_episodes', ErrorCode::NoEpisodes]]);
+
+test('an unreadable episode date gives null instead of throwing', function () {
+    $t = Transcript::fromArray([...loadFixture('transcript_minimal'), 'episode_published' => 'not a date']);
+
+    expect($t->getEpisodePublishedAt())->toBeNull();
+});

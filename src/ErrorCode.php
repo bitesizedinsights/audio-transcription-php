@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace AudioTranscription;
 
-/** Short reason for a failed file. */
+/** Short reason for a failed or skipped file, or for a podcast feed that could not be read. */
 enum ErrorCode: string
 {
     case BlockedUrl = 'blocked_url';
@@ -17,4 +17,7 @@ enum ErrorCode: string
     case NoSpeech = 'no_speech';
     case TranscriptionFailed = 'transcription_failed';
     case ServiceUnavailable = 'service_unavailable';
+    case RunTimeLimit = 'run_time_limit';
+    case InvalidFeed = 'invalid_feed';
+    case NoEpisodes = 'no_episodes';
 }

@@ -13,12 +13,13 @@ test('enum values', function (string $enum, array $values) {
     expect(array_map(static fn ($case) => $case->value, $enum::cases()))->toBe($values);
 })->with([
     'subtitle format' => [SubtitleFormat::class, ['srt', 'vtt']],
-    'status' => [TranscriptStatus::class, ['success', 'partial', 'failed']],
+    'status' => [TranscriptStatus::class, ['success', 'partial', 'skipped', 'failed']],
     'diarization' => [DiarizationStatus::class, ['ok', 'skipped_time', 'failed']],
     'sentiment' => [Sentiment::class, ['positive', 'neutral', 'negative']],
     'error code' => [ErrorCode::class, [
         'blocked_url', 'download_failed', 'too_large', 'unsupported_format', 'invalid_media',
         'no_audio', 'too_long', 'no_speech', 'transcription_failed', 'service_unavailable',
+        'run_time_limit', 'invalid_feed', 'no_episodes',
     ]],
 ]);
 

@@ -376,3 +376,64 @@ test('4xx other than 429 is never retried', function () {
     expect(fn () => $client->transcribe(['https://example.com/a.mp3']))->toThrow(ApiException::class, 'status 401')
         ->and($history)->toHaveCount(1);
 });
+
+test('feed urls are sent with the episode count and urls may be omitted', function () {
+    $history = [];
+    $client = makeClient([runResponse(), jsonResponse(200, [])], $history);
+
+    $client->transcribe(feedUrls: ['https://feeds.example.com/show.xml'], maxEpisodesPerFeed: 3);
+
+    expect(sentBody($history[0]['request']))->toBe([
+        'language' => 'auto',
+        'maxMinutesPerFile' => 60,
+        'feedUrls' => ['https://feeds.example.com/show.xml'],
+        'maxEpisodesPerFeed' => 3,
+    ]);
+});
+
+test('urls and feeds can be combined', function () {
+    $history = [];
+    $client = makeClient([runResponse(), jsonResponse(200, [])], $history);
+
+    $client->transcribe(['https://example.com/a.mp3'], feedUrls: ['https://feeds.example.com/show.xml']);
+
+    expect(sentBody($history[0]['request']))->toMatchArray([
+        'urls' => ['https://example.com/a.mp3'],
+        'feedUrls' => ['https://feeds.example.com/show.xml'],
+        'maxEpisodesPerFeed' => 5,
+    ]);
+});
+
+test('the episode count is not sent without feeds', function () {
+    $history = [];
+    $client = makeClient([runResponse(), jsonResponse(200, [])], $history);
+
+    $client->transcribe(['https://example.com/a.mp3'], maxEpisodesPerFeed: 9);
+
+    expect(sentBody($history[0]['request']))->not->toHaveKeys(['feedUrls', 'maxEpisodesPerFeed']);
+});
+
+test('transcribe needs a url or a feed and a sane episode count', function () {
+    $client = makeClient([]);
+
+    expect(fn () => $client->transcribe())->toThrow(InvalidArgumentException::class, 'at least one URL')
+        ->and(fn () => $client->transcribe(feedUrls: ['https://f.example/x.xml'], maxEpisodesPerFeed: 0))
+        ->toThrow(InvalidArgumentException::class, 'between 1 and 50')
+        ->and(fn () => $client->transcribe(feedUrls: ['https://f.example/x.xml'], maxEpisodesPerFeed: 51))
+        ->toThrow(InvalidArgumentException::class, 'between 1 and 50');
+});
+
+test('the run timeout is sent as the timeout query of the run start only when set', function () {
+    $history = [];
+    $client = makeClient([runResponse(), jsonResponse(200, [])], $history, new Config(maxRetries: 0, runTimeout: 3600));
+
+    $client->transcribe(['https://example.com/a.mp3']);
+
+    expect($history[0]['request']->getUri()->getQuery())->toBe('timeout=3600')
+        ->and($history[1]['request']->getUri()->getQuery())->not->toContain('timeout=3600');
+
+    $history = [];
+    makeClient([runResponse(), jsonResponse(200, [])], $history)->transcribe(['https://example.com/a.mp3']);
+
+    expect($history[0]['request']->getUri()->getQuery())->toBe('');
+});

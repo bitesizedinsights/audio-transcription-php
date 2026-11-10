@@ -10,6 +10,8 @@ use AudioTranscription\ErrorCode;
 use AudioTranscription\Sentiment;
 use AudioTranscription\Support\Value;
 use AudioTranscription\TranscriptStatus;
+use DateTimeImmutable;
+use Exception;
 use InvalidArgumentException;
 use JsonSerializable;
 use RuntimeException;
@@ -43,6 +45,12 @@ final readonly class Transcript implements JsonSerializable
         public ?array $fiveW1h = null,
         public ?SentimentResult $sentiment = null,
         public bool $analysisTruncated = false,
+        public int $minutesCached = 0,
+        public ?string $message = null,
+        public ?string $sourceFeed = null,
+        public ?string $episodeTitle = null,
+        public ?string $episodePublished = null,
+        public ?string $episodeGuid = null,
     ) {}
 
     /**
@@ -93,6 +101,12 @@ final readonly class Transcript implements JsonSerializable
             fiveW1h: Value::nullableArray($data, 'five_w1h'),
             sentiment: $sentiment === null ? null : SentimentResult::fromArray($sentiment),
             analysisTruncated: Value::bool($data, 'analysis_truncated'),
+            minutesCached: Value::nullableInt($data, 'minutes_cached') ?? 0,
+            message: Value::nullableString($data, 'message'),
+            sourceFeed: Value::nullableString($data, 'source_feed'),
+            episodeTitle: Value::nullableString($data, 'episode_title'),
+            episodePublished: Value::nullableString($data, 'episode_published'),
+            episodeGuid: Value::nullableString($data, 'episode_guid'),
         );
     }
 
@@ -127,6 +141,12 @@ final readonly class Transcript implements JsonSerializable
             'five_w1h' => $this->fiveW1h,
             'sentiment' => $this->sentiment?->toArray(),
             'analysis_truncated' => $this->analysisTruncated,
+            'minutes_cached' => $this->minutesCached,
+            'message' => $this->message,
+            'source_feed' => $this->sourceFeed,
+            'episode_title' => $this->episodeTitle,
+            'episode_published' => $this->episodePublished,
+            'episode_guid' => $this->episodeGuid,
         ];
     }
 
@@ -149,6 +169,32 @@ final readonly class Transcript implements JsonSerializable
     public function isFailed(): bool
     {
         return $this->status === TranscriptStatus::Failed;
+    }
+
+    /** Not started because the run's time limit was too close; run the same input again. */
+    public function isSkipped(): bool
+    {
+        return $this->status === TranscriptStatus::Skipped;
+    }
+
+    /** True for `Partial` and `Skipped`: running the same input again continues where this one stopped. */
+    public function needsRerun(): bool
+    {
+        return $this->isPartial() || $this->isSkipped();
+    }
+
+    /** The episode's publication time, null for plain links or when the feed gave none. */
+    public function getEpisodePublishedAt(): ?DateTimeImmutable
+    {
+        if ($this->episodePublished === null) {
+            return null;
+        }
+
+        try {
+            return new DateTimeImmutable($this->episodePublished);
+        } catch (Exception) {
+            return null;
+        }
     }
 
     /** The failure reason as enum, or null when the file did not fail or the code is not known to this library. */
