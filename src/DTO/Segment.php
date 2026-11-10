@@ -51,6 +51,19 @@ final readonly class Segment implements JsonSerializable
         return $this->toArray();
     }
 
+    /** Start time as `m:ss`, or `h:mm:ss` from one hour on, for example `1:05` or `1:02:03`. */
+    public function getTimestamp(): string
+    {
+        $total = max(0, (int) floor($this->start));
+        $hours = intdiv($total, 3600);
+        $minutes = intdiv($total % 3600, 60);
+        $seconds = $total % 60;
+
+        return $hours > 0
+            ? sprintf('%d:%02d:%02d', $hours, $minutes, $seconds)
+            : sprintf('%d:%02d', $minutes, $seconds);
+    }
+
     /** Length of the segment in seconds. */
     public function getDuration(): float
     {

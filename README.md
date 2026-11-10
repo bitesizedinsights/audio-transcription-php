@@ -154,6 +154,17 @@ Every URL produces a `Transcript`, including failed ones (check `status`).
 
 Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`, `getSummaryText()`, `getTags()`, `getSentiment()`, `getSegmentCount()`. `Segment` has `id`, `start`, `end`, `text`, `speaker` (`SPEAKER_00`, ...; `null` unless `diarize` is on) and `getDuration()`.
 
+### Helpers: Timestamps, Links and Subtitle Files
+
+```php
+echo $transcript->getTimestampedText();             // "[0:00] SPEAKER_00: Welcome to the show." per segment
+echo $transcript->segments[1]->getTimestamp();      // "0:02", or "1:02:03" past an hour
+echo $transcript->getSegmentUrl($segment);          // "https://example.com/podcast.mp3#t=2" (HTML5 media fragment)
+$transcript->saveSrt('episode.srt');                // needs SubtitleFormat::Srt; saveVtt() for WebVTT
+```
+
+`saveSrt()` and `saveVtt()` throw a `RuntimeException` when the format was not requested or the file cannot be written.
+
 ### Store and Restore Transcripts
 
 `Transcript`, `Segment`, `Summary`, `Tags` and `SentimentResult` implement `JsonSerializable` and have `toArray()`. The array uses the Actor's field names (`transcribed_seconds`, `minutes_transcribed`, ...), so `fromArray()` restores an equal object:

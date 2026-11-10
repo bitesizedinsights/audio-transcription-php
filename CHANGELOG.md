@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Added
 
+- Convenience helpers: `Segment::getTimestamp()`, `Transcript::getSegmentUrl()`, `Transcript::getTimestampedText()`, `Transcript::saveSrt()` and `Transcript::saveVtt()`.
 - `toArray()` and `JsonSerializable` on `Transcript`, `Segment`, `Summary`, `Tags` and `SentimentResult`, in the Actor's field names, so transcripts can be stored and restored with `fromArray()`.
 - `Segment::$speaker`: the speaker label of a segment when `diarize` is on, otherwise `null`.
 - `Client::setApifyKey()` and `MissingApiKeyException`, thrown on the first API call when no key is available.

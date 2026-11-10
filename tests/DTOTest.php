@@ -190,3 +190,42 @@ test('unknown sentiment label is stored and read back as null', function () {
     expect($result->sentiment)->toBeNull()
         ->and(SentimentResult::fromArray($result->toArray())->sentiment)->toBeNull();
 });
+
+test('segment timestamp is m:ss or h:mm:ss', function (float $start, string $expected) {
+    expect((new Segment(0, $start, $start + 1, 'x'))->getTimestamp())->toBe($expected);
+})->with([[0.0, '0:00'], [5.9, '0:05'], [65.0, '1:05'], [3599.9, '59:59'], [3723.0, '1:02:03']]);
+
+test('segment url and timestamped text', function () {
+    $t = Transcript::fromArray(loadFixture('transcript_full'));
+    $second = $t->segments[1];
+
+    expect($t->getSegmentUrl($second))->toBe('https://example.com/podcast.mp3#t='.(int) floor($second->start))
+        ->and(Transcript::fromArray(['url' => 'https://a.test/x.mp3#t=9'] + loadFixture('transcript_full'))
+            ->getSegmentUrl($second))->toBe('https://a.test/x.mp3#t='.(int) floor($second->start))
+        ->and($t->getTimestampedText())->toStartWith('[0:00] ')
+        ->and(substr_count($t->getTimestampedText(), "\n"))->toBe(count($t->segments) - 1);
+});
+
+test('timestamped text includes speaker labels', function () {
+    $t = new Transcript('https://a.test/x.mp3', TranscriptStatus::Success, false, 5.0, 1, false, [
+        new Segment(0, 0.0, 2.0, 'Hello.', 'SPEAKER_00'),
+        new Segment(1, 62.0, 64.0, 'Hi.', 'SPEAKER_01'),
+    ]);
+
+    expect($t->getTimestampedText())->toBe("[0:00] SPEAKER_00: Hello.\n[1:02] SPEAKER_01: Hi.");
+});
+
+test('saveSrt and saveVtt write the subtitles or explain what is missing', function () {
+    $full = Transcript::fromArray(loadFixture('transcript_full'));
+    $dir = sys_get_temp_dir().'/at-'.bin2hex(random_bytes(4));
+    mkdir($dir);
+
+    $full->saveSrt("{$dir}/a.srt");
+    expect(file_get_contents("{$dir}/a.srt"))->toBe($full->srt);
+
+    expect(fn () => $full->saveVtt("{$dir}/a.vtt"))->toThrow(RuntimeException::class, 'No WebVTT')
+        ->and(fn () => $full->saveSrt("{$dir}/missing/a.srt"))->toThrow(RuntimeException::class, 'Cannot write');
+
+    unlink("{$dir}/a.srt");
+    rmdir($dir);
+});

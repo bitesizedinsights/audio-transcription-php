@@ -11,6 +11,7 @@ use AudioTranscription\Support\Value;
 use AudioTranscription\TranscriptStatus;
 use InvalidArgumentException;
 use JsonSerializable;
+use RuntimeException;
 
 final readonly class Transcript implements JsonSerializable
 {
@@ -169,6 +170,62 @@ final readonly class Transcript implements JsonSerializable
     public function getSentiment(): ?Sentiment
     {
         return $this->sentiment?->sentiment;
+    }
+
+    /**
+     * The media URL with a media fragment (`#t=SECONDS`) that starts playback at the segment, for HTML5 audio and
+     * video players. Any fragment already on the URL is replaced.
+     */
+    public function getSegmentUrl(Segment $segment): string
+    {
+        $base = explode('#', $this->url, 2)[0];
+
+        return $base.'#t='.(int) floor($segment->start);
+    }
+
+    /** One line per segment, `[m:ss] text` (`[m:ss] SPEAKER_00: text` with speaker labels). */
+    public function getTimestampedText(): string
+    {
+        return implode("\n", array_map(
+            static fn (Segment $s): string => sprintf(
+                '[%s] %s%s',
+                $s->getTimestamp(),
+                $s->speaker === null ? '' : $s->speaker.': ',
+                $s->text,
+            ),
+            $this->segments,
+        ));
+    }
+
+    /**
+     * Write the SRT subtitles to a file.
+     *
+     * @throws RuntimeException when SRT was not requested (`SubtitleFormat::Srt`) or the file cannot be written
+     */
+    public function saveSrt(string $path): void
+    {
+        $this->save($this->srt, $path, 'SRT');
+    }
+
+    /**
+     * Write the WebVTT subtitles to a file.
+     *
+     * @throws RuntimeException when WebVTT was not requested (`SubtitleFormat::Vtt`) or the file cannot be written
+     */
+    public function saveVtt(string $path): void
+    {
+        $this->save($this->vtt, $path, 'WebVTT');
+    }
+
+    private function save(?string $content, string $path, string $label): void
+    {
+        if ($content === null) {
+            throw new RuntimeException("No {$label} subtitles in this transcript; request them with subtitleFormats");
+        }
+
+        if (! is_dir(dirname($path)) || @file_put_contents($path, $content) === false) {
+            throw new RuntimeException("Cannot write {$label} subtitles to {$path}");
+        }
     }
 
     /** Number of segments with text. */
