@@ -10,8 +10,9 @@ use AudioTranscription\Sentiment;
 use AudioTranscription\Support\Value;
 use AudioTranscription\TranscriptStatus;
 use InvalidArgumentException;
+use JsonSerializable;
 
-final readonly class Transcript
+final readonly class Transcript implements JsonSerializable
 {
     /**
      * @param  list<Segment>  $segments
@@ -91,6 +92,46 @@ final readonly class Transcript
             sentiment: $sentiment === null ? null : SentimentResult::fromArray($sentiment),
             analysisTruncated: Value::bool($data, 'analysis_truncated'),
         );
+    }
+
+    /**
+     * The Actor's dataset row shape (snake_case keys), so `Transcript::fromArray($t->toArray())` restores an equal
+     * transcript. Use it, or `json_encode($transcript)`, to store transcripts in a database, cache or queue.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'url' => $this->url,
+            'status' => $this->status->value,
+            'language' => $this->language,
+            'language_probability' => $this->languageProbability,
+            'translated' => $this->translated,
+            'duration_seconds' => $this->durationSeconds,
+            'transcribed_seconds' => $this->transcribedSeconds,
+            'minutes_transcribed' => $this->minutesTranscribed,
+            'truncated' => $this->truncated,
+            'text' => $this->text,
+            'segments' => array_map(static fn (Segment $s): array => $s->toArray(), $this->segments),
+            'speakers' => $this->speakers,
+            'diarization' => $this->diarization?->value,
+            'srt' => $this->srt,
+            'vtt' => $this->vtt,
+            'error_code' => $this->errorCode,
+            'error' => $this->error,
+            'summary' => $this->summary?->toArray(),
+            'tags' => $this->tags?->toArray(),
+            'five_w1h' => $this->fiveW1h,
+            'sentiment' => $this->sentiment?->toArray(),
+            'analysis_truncated' => $this->analysisTruncated,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 
     public function isSuccessful(): bool

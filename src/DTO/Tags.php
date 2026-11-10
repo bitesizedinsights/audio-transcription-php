@@ -6,8 +6,9 @@ namespace AudioTranscription\DTO;
 
 use AudioTranscription\Support\Value;
 use InvalidArgumentException;
+use JsonSerializable;
 
-final readonly class Tags
+final readonly class Tags implements JsonSerializable
 {
     /** @param  list<string>  $tags */
     public function __construct(
@@ -29,5 +30,21 @@ final readonly class Tags
         }
 
         return new self($tags, Value::nullableInt($data, 'count') ?? count($tags));
+    }
+
+    /**
+     * The Actor's field names, so the result can be passed back to `fromArray()`.
+     *
+     * @return array{tags: list<string>, count: int}
+     */
+    public function toArray(): array
+    {
+        return ['tags' => $this->tags, 'count' => $this->count];
+    }
+
+    /** @return array{tags: list<string>, count: int} */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 }

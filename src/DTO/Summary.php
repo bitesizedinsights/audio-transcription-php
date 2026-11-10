@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace AudioTranscription\DTO;
 
 use AudioTranscription\Support\Value;
+use JsonSerializable;
 
-final readonly class Summary
+final readonly class Summary implements JsonSerializable
 {
     public function __construct(
         public string $summary,
@@ -26,5 +27,28 @@ final readonly class Summary
             summaryLength: Value::nullableInt($stats, 'summary_length'),
             compressionRatio: Value::nullableFloat($stats, 'compression_ratio'),
         );
+    }
+
+    /**
+     * The Actor's field names, so the result can be passed back to `fromArray()`.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'summary' => $this->summary,
+            'stats' => [
+                'original_length' => $this->originalLength,
+                'summary_length' => $this->summaryLength,
+                'compression_ratio' => $this->compressionRatio,
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 }

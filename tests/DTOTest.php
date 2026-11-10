@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use AudioTranscription\DiarizationStatus;
 use AudioTranscription\DTO\Segment;
+use AudioTranscription\DTO\SentimentResult;
 use AudioTranscription\DTO\Summary;
 use AudioTranscription\DTO\Tags;
 use AudioTranscription\DTO\Transcript;
@@ -156,4 +157,36 @@ test('segment speaker is read when present and null otherwise', function () {
     expect($labelled->speaker)->toBe('SPEAKER_01')
         ->and($plain->speaker)->toBeNull()
         ->and($nulled->speaker)->toBeNull();
+});
+
+test('transcript round trips through toArray and json', function (string $fixture) {
+    $transcript = Transcript::fromArray(loadFixture($fixture));
+
+    $viaArray = Transcript::fromArray($transcript->toArray());
+    $viaJson = Transcript::fromArray(json_decode(json_encode($transcript, JSON_THROW_ON_ERROR), true));
+
+    expect($viaArray)->toEqual($transcript)
+        ->and($viaJson)->toEqual($transcript);
+})->with(['transcript_full', 'transcript_minimal', 'transcript_failed']);
+
+test('toArray uses the Actor field names', function () {
+    $array = Transcript::fromArray(loadFixture('transcript_full'))->toArray();
+
+    expect($array)->toHaveKeys(['transcribed_seconds', 'minutes_transcribed', 'language_probability', 'five_w1h'])
+        ->and($array['status'])->toBe('success')
+        ->and($array['segments'][0])->toHaveKeys(['id', 'start', 'end', 'text', 'speaker']);
+});
+
+test('segment with a speaker round trips', function () {
+    $segment = new Segment(3, 1.5, 2.5, 'Hi.', 'SPEAKER_01');
+
+    expect(Segment::fromArray($segment->toArray()))->toEqual($segment)
+        ->and(json_encode($segment))->toContain('"speaker":"SPEAKER_01"');
+});
+
+test('unknown sentiment label is stored and read back as null', function () {
+    $result = SentimentResult::fromArray(['sentiment' => 'ecstatic', 'confidence' => 0.5]);
+
+    expect($result->sentiment)->toBeNull()
+        ->and(SentimentResult::fromArray($result->toArray())->sentiment)->toBeNull();
 });

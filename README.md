@@ -154,6 +154,17 @@ Every URL produces a `Transcript`, including failed ones (check `status`).
 
 Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`, `getSummaryText()`, `getTags()`, `getSentiment()`, `getSegmentCount()`. `Segment` has `id`, `start`, `end`, `text`, `speaker` (`SPEAKER_00`, ...; `null` unless `diarize` is on) and `getDuration()`.
 
+### Store and Restore Transcripts
+
+`Transcript`, `Segment`, `Summary`, `Tags` and `SentimentResult` implement `JsonSerializable` and have `toArray()`. The array uses the Actor's field names (`transcribed_seconds`, `minutes_transcribed`, ...), so `fromArray()` restores an equal object:
+
+```php
+$json = json_encode($transcript);                            // database column, cache, queue payload
+$restored = Transcript::fromArray(json_decode($json, true)); // same data again
+```
+
+An unknown sentiment label from the service is read as `null` and stored as an empty string.
+
 ## Language, Subtitle and Status Enums
 
 | Enum | Values |
