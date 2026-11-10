@@ -297,3 +297,82 @@ test('throws MissingApiKeyException when no key is set anywhere', function () {
         putenv($previous[1] === false ? 'APIFY_TOKEN' : 'APIFY_TOKEN='.$previous[1]);
     }
 });
+
+test('429 is retried after the Retry-After wait and then succeeds', function () {
+    $history = [];
+    $sleeps = [];
+    $client = makeClient([
+        jsonResponse(429, ['error' => 'slow'], ['Retry-After' => '5']),
+        runResponse(),
+        jsonResponse(200, []),
+    ], $history, new Config, sleeps: $sleeps);
+
+    expect($client->transcribe(['https://example.com/a.mp3']))->toBe([])
+        ->and($sleeps)->toHaveCount(1)
+        ->and($sleeps[0])->toBeGreaterThanOrEqual(5.0)
+        ->and($history)->toHaveCount(3);
+});
+
+test('429 with a Retry-After above the maximum delay is not waited out', function () {
+    $sleeps = [];
+    $client = makeClient([jsonResponse(429, [], ['Retry-After' => '120'])], config: new Config, sleeps: $sleeps);
+
+    expect(fn () => $client->transcribe(['https://example.com/a.mp3']))->toThrow(RateLimitException::class)
+        ->and($sleeps)->toBe([]);
+});
+
+test('GET requests retry on 5xx with growing backoff, then give up', function () {
+    $sleeps = [];
+    $client = makeClient([
+        runResponse('RUNNING'),
+        new Response(503, [], 'a'),
+        new Response(502, [], 'b'),
+        new Response(500, [], 'c'),
+        new Response(500, [], 'd'),
+    ], config: new Config(maxRetries: 3), sleeps: $sleeps);
+
+    expect(fn () => $client->transcribe(['https://example.com/a.mp3']))
+        ->toThrow(ApiException::class, 'status 500')
+        ->and($sleeps)->toHaveCount(3)
+        ->and($sleeps[0])->toBeBetween(0.5, 1.0)
+        ->and($sleeps[1])->toBeBetween(1.0, 2.0)
+        ->and($sleeps[2])->toBeBetween(2.0, 4.0);
+});
+
+test('starting a run is not repeated after a 5xx', function () {
+    $history = [];
+    $sleeps = [];
+    $client = makeClient([new Response(500, [], 'boom'), runResponse()], $history, new Config, sleeps: $sleeps);
+
+    expect(fn () => $client->transcribe(['https://example.com/a.mp3']))->toThrow(ApiException::class, 'status 500')
+        ->and($history)->toHaveCount(1)
+        ->and($sleeps)->toBe([]);
+});
+
+test('a failed connection is retried, also when starting a run', function () {
+    $sleeps = [];
+    $client = makeClient([
+        new ConnectException('no route', new Request('POST', 'https://api.apify.com')),
+        runResponse(),
+        jsonResponse(200, []),
+    ], config: new Config, sleeps: $sleeps);
+
+    expect($client->transcribe(['https://example.com/a.mp3']))->toBe([])
+        ->and($sleeps)->toHaveCount(1);
+});
+
+test('maxRetries 0 turns retrying off', function () {
+    $history = [];
+    $client = makeClient([jsonResponse(429, [], ['Retry-After' => '1']), runResponse()], $history);
+
+    expect(fn () => $client->transcribe(['https://example.com/a.mp3']))->toThrow(RateLimitException::class)
+        ->and($history)->toHaveCount(1);
+});
+
+test('4xx other than 429 is never retried', function () {
+    $history = [];
+    $client = makeClient([new Response(401, [], 'no'), runResponse()], $history, new Config);
+
+    expect(fn () => $client->transcribe(['https://example.com/a.mp3']))->toThrow(ApiException::class, 'status 401')
+        ->and($history)->toHaveCount(1);
+});

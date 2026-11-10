@@ -201,6 +201,20 @@ $client = (new Client(new Config(
 
 `Config` also accepts `actorId` (default `bite-sized-insights/transcription`) and `baseUrl` (default `https://api.apify.com/v2`). A custom Guzzle client can be passed as second constructor argument, which is handy for tests and proxies.
 
+## Retries and Backoff
+
+Failed requests are retried automatically, by default up to 3 times with exponential backoff (1 s, 2 s, 4 s, each with 50 to 100 percent jitter, at most 30 s):
+
+- **Rate limits (429):** retried after at least the `Retry-After` time. If the server asks for more than `retryMaxDelay`, a `RateLimitException` is thrown right away.
+- **Server errors (5xx) and connection failures:** retried for reading results and polling.
+- **Starting a run:** only retried after a 429 or a failed connection. After a 5xx or a timeout the run may already exist, and a repeat would be billed twice, so the error is thrown instead.
+- **Other errors (4xx):** never retried.
+
+```php
+$client = (new Client(new Config(maxRetries: 5, retryBaseDelay: 2.0, retryMaxDelay: 60.0)))->setApifyKey($apiToken);
+// new Config(maxRetries: 0) turns retrying off
+```
+
 ## Error Handling for Failed Transcriptions
 
 ```php
