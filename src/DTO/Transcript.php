@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AudioTranscription\DTO;
 
+use AudioTranscription\Chunker;
 use AudioTranscription\DiarizationStatus;
 use AudioTranscription\ErrorCode;
 use AudioTranscription\Sentiment;
@@ -178,9 +179,53 @@ final readonly class Transcript implements JsonSerializable
      */
     public function getSegmentUrl(Segment $segment): string
     {
-        $base = explode('#', $this->url, 2)[0];
+        return $this->urlAt($segment->start);
+    }
 
-        return $base.'#t='.(int) floor($segment->start);
+    /** Like `getSegmentUrl()`, for the start of a chunk, to cite where a retrieved chunk begins. */
+    public function getChunkUrl(Chunk $chunk): string
+    {
+        return $this->urlAt($chunk->start);
+    }
+
+    private function urlAt(float $seconds): string
+    {
+        return explode('#', $this->url, 2)[0].'#t='.(int) floor($seconds);
+    }
+
+    /**
+     * Group the segments into chunks for retrieval (RAG), each with its time range, segment IDs and speakers. A
+     * segment is never split. A chunk is closed when the next segment would push it over `$maxSeconds` or
+     * `$maxCharacters`, when the speaker changes (`$splitOnSpeaker`, needs `diarize`) or after a pause of at least
+     * `$pauseSeconds`.
+     *
+     * - Fixed time window: `chunks(maxSeconds: 60, splitOnSpeaker: false)` with a large `maxCharacters`.
+     * - Size capped: `chunks(maxSeconds: 600, maxCharacters: 800)`.
+     * - Speaker and pause aware: `chunks(splitOnSpeaker: true, pauseSeconds: 2.0)`.
+     *
+     * @param  float  $maxSeconds  Longest chunk in seconds, first segment start to last segment end.
+     * @param  int  $maxCharacters  Longest chunk text in characters.
+     * @param  int  $overlapSegments  Segments repeated at the start of the next chunk after a size break.
+     * @param  float|null  $pauseSeconds  Start a new chunk after a silence of at least this many seconds.
+     * @return list<Chunk>
+     *
+     * @throws InvalidArgumentException when a limit is not positive or the overlap is negative
+     */
+    public function chunks(
+        float $maxSeconds = 60.0,
+        int $maxCharacters = 1000,
+        int $overlapSegments = 0,
+        bool $splitOnSpeaker = true,
+        ?float $pauseSeconds = null,
+    ): array {
+        return Chunker::chunk(
+            $this->segments,
+            $maxSeconds,
+            $maxCharacters,
+            $overlapSegments,
+            $splitOnSpeaker,
+            $pauseSeconds,
+        );
     }
 
     /** One line per segment, `[m:ss] text` (`[m:ss] SPEAKER_00: text` with speaker labels). */

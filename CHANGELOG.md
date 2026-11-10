@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Added
 
+- `Transcript::chunks()` and the `Chunk` DTO: time-aware chunks for RAG with start, end, segment IDs and speakers, limits by seconds and characters, optional split on speaker change and pause, optional overlap. `Transcript::getChunkUrl()` links to the chunk start.
 - Automatic retrying with exponential backoff and jitter (`Config::$maxRetries`, `$retryBaseDelay`, `$retryMaxDelay`): rate limits honour `Retry-After`, 5xx and connection failures are retried, and starting a run is not repeated after a 5xx or timeout.
 - Convenience helpers: `Segment::getTimestamp()`, `Transcript::getSegmentUrl()`, `Transcript::getTimestampedText()`, `Transcript::saveSrt()` and `Transcript::saveVtt()`.
 - `toArray()` and `JsonSerializable` on `Transcript`, `Segment`, `Summary`, `Tags` and `SentimentResult`, in the Actor's field names, so transcripts can be stored and restored with `fromArray()`.

@@ -154,6 +154,39 @@ Every URL produces a `Transcript`, including failed ones (check `status`).
 
 Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`, `getSummaryText()`, `getTags()`, `getSentiment()`, `getSegmentCount()`. `Segment` has `id`, `start`, `end`, `text`, `speaker` (`SPEAKER_00`, ...; `null` unless `diarize` is on) and `getDuration()`.
 
+### Chunks for RAG and Semantic Search
+
+`$transcript->chunks()` groups the segments into chunks you can embed. Every chunk keeps its time range, the IDs of its segments and its speakers, so an answer can cite the exact second. A segment is never split, so chunk boundaries are always real segment boundaries.
+
+```php
+foreach ($transcript->chunks(maxSeconds: 60, maxCharacters: 1000, overlapSegments: 1, pauseSeconds: 2.0) as $chunk) {
+    // $chunk->text is what you embed; store the rest as metadata
+    save($chunk->text, [
+        'start' => $chunk->start,                        // seconds
+        'end' => $chunk->end,
+        'speakers' => $chunk->speakers,                  // [] without diarize
+        'segment_ids' => $chunk->segmentIds,             // map back to $transcript->segments for playback
+        'url' => $transcript->getChunkUrl($chunk),       // https://example.com/ep.mp3#t=125
+    ]);
+}
+```
+
+| Parameter | Default | Closes a chunk when |
+|---|---|---|
+| `maxSeconds` | `60.0` | the next segment would make the chunk longer than this (first segment start to last segment end) |
+| `maxCharacters` | `1000` | the next segment would make the text longer than this |
+| `splitOnSpeaker` | `true` | the speaker changes (needs `diarize: true`, otherwise no effect) |
+| `pauseSeconds` | `null` | the silence before the next segment is at least this long |
+| `overlapSegments` | `0` | not a closing rule: repeats this many segments at the start of the next chunk after a size break. Never carried over a speaker change or a pause |
+
+Typical setups:
+
+- **Fixed time window:** `chunks(maxSeconds: 60, maxCharacters: 100000, splitOnSpeaker: false)`. Predictable, but can cut a thought in two.
+- **Size capped:** `chunks(maxSeconds: 600, maxCharacters: 800, overlapSegments: 1)`. Even text size for the embedding model.
+- **Speaker and pause aware:** `chunks(splitOnSpeaker: true, pauseSeconds: 2.0)`. Best for interviews and meetings.
+
+A segment longer than the limits becomes a chunk of its own. Smaller windows (30 to 60 seconds) retrieve more precisely, larger ones (120 to 300 seconds) carry more context. `Chunk::getSpeaker()` returns the label when the whole chunk has one speaker, `getDuration()` its length. Chunks serialize with `json_encode()` and `toArray()`. See `examples/07-rag-chunks.php`.
+
 ### Helpers: Timestamps, Links and Subtitle Files
 
 ```php
@@ -245,6 +278,7 @@ Runnable scripts in [`examples/`](examples/); each starts with `$apiToken` (read
 - `04-speakers-and-translation.php`: speaker labels and English translation
 - `05-analysis-addons.php`: summary, tags and sentiment
 - `06-error-handling.php`: exceptions and failed files
+- `07-rag-chunks.php`: speaker and pause aware chunks with time ranges and links, ready to embed
 
 ```bash
 APIFY_API_TOKEN=your_token php examples/01-basic.php
