@@ -21,7 +21,7 @@ Key facts:
 - `Config(string $actorId = 'bite-sized-insights/transcription', string $baseUrl = 'https://api.apify.com/v2', int $timeout = 600, int $requestTimeout = 90)`
 - DTOs (all `final readonly`, `fromArray(array)`):
   - `Transcript`: url: string, status: TranscriptStatus, translated: bool, transcribedSeconds: float, minutesTranscribed: int, truncated: bool, segments: Segment[], language: ?string, languageProbability: ?float, durationSeconds: ?float, text: ?string, speakers: ?int, diarization: ?DiarizationStatus, srt: ?string, vtt: ?string, errorCode: ?string, error: ?string, summary: ?Summary, tags: ?Tags, fiveW1h: ?array, sentiment: ?SentimentResult, analysisTruncated: bool; helpers isSuccessful(), isPartial(), isFailed(), getErrorCode(): ?ErrorCode, getSummaryText(): ?string, getTags(): string[], getSentiment(): ?Sentiment, getSegmentCount(): int
-  - `Segment`: id: int, start: float, end: float, text: string; helper getDuration(): float
+  - `Segment`: id: int, start: float, end: float, text: string, speaker: ?string (set with diarize); helper getDuration(): float
   - `Summary`: summary: string, originalLength: ?int, summaryLength: ?int, compressionRatio: ?float
   - `Tags`: tags: string[], count: int
   - `SentimentResult`: sentiment: ?Sentiment, confidence: ?float

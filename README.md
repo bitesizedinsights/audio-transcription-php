@@ -152,7 +152,7 @@ Every URL produces a `Transcript`, including failed ones (check `status`).
 | `sentiment` | `?SentimentResult` | Overall sentiment with confidence, when requested |
 | `analysisTruncated` | `bool` | True when only the beginning of a very long transcript was analysed |
 
-Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`, `getSummaryText()`, `getTags()`, `getSentiment()`, `getSegmentCount()`. `Segment` has `id`, `start`, `end`, `text` and `getDuration()`.
+Helper methods: `isSuccessful()`, `isPartial()`, `isFailed()`, `getErrorCode()`, `getSummaryText()`, `getTags()`, `getSentiment()`, `getSegmentCount()`. `Segment` has `id`, `start`, `end`, `text`, `speaker` (`SPEAKER_00`, ...; `null` unless `diarize` is on) and `getDuration()`.
 
 ## Language, Subtitle and Status Enums
 

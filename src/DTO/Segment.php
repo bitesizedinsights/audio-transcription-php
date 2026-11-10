@@ -13,6 +13,7 @@ final readonly class Segment
         public float $start,
         public float $end,
         public string $text,
+        public ?string $speaker = null,
     ) {}
 
     /** @param  array<mixed>  $data */
@@ -23,6 +24,7 @@ final readonly class Segment
             start: Value::float($data, 'start'),
             end: Value::float($data, 'end'),
             text: Value::string($data, 'text'),
+            speaker: Value::nullableString($data, 'speaker'),
         );
     }
 

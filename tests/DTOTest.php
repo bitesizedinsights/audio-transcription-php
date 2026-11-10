@@ -147,3 +147,13 @@ test('tags count falls back to the list size', function () {
 test('tags reject non-strings', function () {
     expect(fn () => Tags::fromArray(['tags' => [1]]))->toThrow(InvalidArgumentException::class);
 });
+
+test('segment speaker is read when present and null otherwise', function () {
+    $labelled = Segment::fromArray(['id' => 0, 'start' => 0.0, 'end' => 1.0, 'text' => 'Hi.', 'speaker' => 'SPEAKER_01']);
+    $plain = Segment::fromArray(['id' => 1, 'start' => 1.0, 'end' => 2.0, 'text' => 'Hello.']);
+    $nulled = Segment::fromArray(['id' => 2, 'start' => 2.0, 'end' => 3.0, 'text' => 'Hey.', 'speaker' => null]);
+
+    expect($labelled->speaker)->toBe('SPEAKER_01')
+        ->and($plain->speaker)->toBeNull()
+        ->and($nulled->speaker)->toBeNull();
+});

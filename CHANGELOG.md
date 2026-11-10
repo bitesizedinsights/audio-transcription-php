@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Added
 
+- `Segment::$speaker`: the speaker label of a segment when `diarize` is on, otherwise `null`.
 - `Client::setApifyKey()` and `MissingApiKeyException`, thrown on the first API call when no key is available.
 
 ## [0.1.0] - 2026-11-08
