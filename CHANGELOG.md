@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Added
 
+- Run handles for starting now and collecting later: `Client::start()` (arguments of `transcribe()`, returns a `Run` at once), `getRun()`, `wait()`, `results()` and `abort()`. `transcribe()` behaves as before and is `results(wait(start(...)))`. New `Run` DTO and `RunStatus` enum; `wait()` keeps polling while a run is `ABORTING` or `TIMING-OUT`. `ApiException::$runId` carries the run the error belongs to.
 - Podcast feeds: `Client::transcribe()` accepts `feedUrls` and `maxEpisodesPerFeed` (and `urls` may be omitted). `Transcript` gets `minutesCached`, `message`, `sourceFeed`, `episodeTitle`, `episodePublished`, `episodeGuid`, `isSkipped()`, `needsRerun()` and `getEpisodePublishedAt()`; `TranscriptStatus::Skipped` and `ErrorCode::RunTimeLimit`, `InvalidFeed`, `NoEpisodes`.
 - `Config::$runTimeout` sets Apify's time limit of the run (the Actor's default of 300 s is too short for feeds).
 - `Transcript::chunks()` and the `Chunk` DTO: time-aware chunks for RAG with start, end, segment IDs and speakers, limits by seconds and characters, optional split on speaker change and pause, optional overlap. `Transcript::getChunkUrl()` links to the chunk start.

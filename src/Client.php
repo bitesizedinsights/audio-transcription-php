@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AudioTranscription;
 
+use AudioTranscription\DTO\Run;
 use AudioTranscription\DTO\Transcript;
 use AudioTranscription\Exception\ApiException;
 use AudioTranscription\Exception\MissingApiKeyException;
@@ -19,10 +20,6 @@ use JsonException;
 
 final class Client
 {
-    private const FAILED_STATUSES = ['FAILED', 'ABORTED', 'TIMED-OUT'];
-
-    private const RUNNING_STATUSES = ['READY', 'RUNNING'];
-
     /** Longest wait Apify allows per request. */
     private const MAX_WAIT_SECONDS = 60;
 
@@ -75,7 +72,8 @@ final class Client
      * @param  int  $maxEpisodesPerFeed  Newest episodes per feed, 1 to 50. Links and episodes make at most 100 files.
      * @return list<Transcript> One per file (and one failed row per feed that could not be read), links first.
      *
-     * @throws InvalidArgumentException when neither `$urls` nor `$feedUrls` is given, or `$maxEpisodesPerFeed` is out of range
+     * @throws InvalidArgumentException when neither `$urls` nor `$feedUrls` is given, or `$maxEpisodesPerFeed` is
+     *                                  out of range
      * @throws ApiException
      * @throws RateLimitException
      */
@@ -93,6 +91,189 @@ final class Client
         bool $withSentiment = false,
         array $feedUrls = [],
         int $maxEpisodesPerFeed = 5,
+    ): array {
+        $run = $this->start(
+            $urls,
+            $language,
+            $translateToEnglish,
+            $subtitleFormats,
+            $diarize,
+            $numSpeakers,
+            $maxMinutesPerFile,
+            $withSummary,
+            $withTags,
+            $with5w1h,
+            $withSentiment,
+            $feedUrls,
+            $maxEpisodesPerFeed,
+        );
+
+        return $this->results($this->wait($run));
+    }
+
+    /**
+     * Start a transcription run and return at once; the run keeps going on Apify. Take the arguments of
+     * `transcribe()`. Keep `$run->id`, then collect the transcripts with `wait()` and `results()`, in this or a
+     * later process.
+     *
+     * @param  list<string>  $urls
+     * @param  list<SubtitleFormat>  $subtitleFormats
+     * @param  list<string>  $feedUrls
+     *
+     * @throws InvalidArgumentException when neither `$urls` nor `$feedUrls` is given, or `$maxEpisodesPerFeed` is
+     *                                  out of range
+     * @throws ApiException
+     * @throws RateLimitException
+     */
+    public function start(
+        array $urls = [],
+        Language $language = Language::Auto,
+        bool $translateToEnglish = false,
+        array $subtitleFormats = [],
+        bool $diarize = false,
+        ?int $numSpeakers = null,
+        int $maxMinutesPerFile = 60,
+        bool $withSummary = false,
+        bool $withTags = false,
+        bool $with5w1h = false,
+        bool $withSentiment = false,
+        array $feedUrls = [],
+        int $maxEpisodesPerFeed = 5,
+    ): Run {
+        $input = $this->buildInput(
+            $urls,
+            $language,
+            $translateToEnglish,
+            $subtitleFormats,
+            $diarize,
+            $numSpeakers,
+            $maxMinutesPerFile,
+            $withSummary,
+            $withTags,
+            $with5w1h,
+            $withSentiment,
+            $feedUrls,
+            $maxEpisodesPerFeed,
+        );
+
+        $actor = str_replace('/', '~', $this->config->actorId);
+        $options = ['json' => $input];
+
+        if ($this->config->runTimeout !== null) {
+            $options['query'] = ['timeout' => $this->config->runTimeout];
+        }
+
+        return $this->parseRun($this->request('POST', "/acts/{$actor}/runs", $options));
+    }
+
+    /**
+     * Look a run up once, without waiting for it.
+     *
+     * @throws ApiException
+     * @throws RateLimitException
+     */
+    public function getRun(string $runId): Run
+    {
+        return $this->fetchRun($runId);
+    }
+
+    /**
+     * Wait until the run has finished successfully. Accepts the run from `start()` or just its ID.
+     *
+     * @param  int|null  $timeout  Seconds to wait at most; defaults to `Config::$timeout`.
+     *
+     * @throws ApiException when the run ends as FAILED, ABORTED or TIMED-OUT, or does not finish in time
+     * @throws RateLimitException
+     */
+    public function wait(Run|string $run, ?int $timeout = null): Run
+    {
+        $run = is_string($run) ? $this->fetchRun($run) : $run;
+        $limit = $timeout ?? $this->config->timeout;
+        $deadline = time() + $limit;
+
+        while (true) {
+            if ($run->isSuccessful()) {
+                return $run;
+            }
+
+            if ($run->status->isFailure()) {
+                throw new ApiException("Actor run ended with status {$run->status->value}", 0, null, $run->id);
+            }
+
+            $remaining = $deadline - time();
+
+            if ($remaining <= 0) {
+                throw new ApiException("Actor run did not finish within {$limit} seconds", 0, null, $run->id);
+            }
+
+            $run = $this->fetchRun($run->id, min(self::MAX_WAIT_SECONDS, $remaining));
+        }
+    }
+
+    /**
+     * Read the transcripts of a successful run: one per file in dataset order, like `transcribe()`. Accepts the
+     * run or just its ID.
+     *
+     * @return list<Transcript>
+     *
+     * @throws ApiException when the run has not succeeded (call `wait()` first) or the dataset cannot be mapped
+     * @throws RateLimitException
+     */
+    public function results(Run|string $run): array
+    {
+        $run = is_string($run) ? $this->fetchRun($run) : $run;
+
+        if (! $run->isSuccessful()) {
+            throw new ApiException(
+                "Run {$run->id} has status {$run->status->value}; results exist only after SUCCEEDED, call wait()",
+                0,
+                null,
+                $run->id,
+            );
+        }
+
+        if ($run->defaultDatasetId === null || $run->defaultDatasetId === '') {
+            throw new ApiException('Invalid API response: missing dataset ID', 0, null, $run->id);
+        }
+
+        return $this->fetchTranscripts($run);
+    }
+
+    /**
+     * Ask Apify to stop a run. Returns the run in its new state, usually ABORTING or ABORTED.
+     *
+     * @throws ApiException
+     * @throws RateLimitException
+     */
+    public function abort(Run|string $run): Run
+    {
+        $runId = is_string($run) ? $run : $run->id;
+
+        return $this->parseRun($this->request('POST', '/actor-runs/'.rawurlencode($runId).'/abort'));
+    }
+
+    /**
+     * @param  list<string>  $urls
+     * @param  list<SubtitleFormat>  $subtitleFormats
+     * @param  list<string>  $feedUrls
+     * @return array<string, mixed>
+     *
+     * @throws InvalidArgumentException
+     */
+    private function buildInput(
+        array $urls,
+        Language $language,
+        bool $translateToEnglish,
+        array $subtitleFormats,
+        bool $diarize,
+        ?int $numSpeakers,
+        int $maxMinutesPerFile,
+        bool $withSummary,
+        bool $withTags,
+        bool $with5w1h,
+        bool $withSentiment,
+        array $feedUrls,
+        int $maxEpisodesPerFeed,
     ): array {
         if ($urls === [] && $feedUrls === []) {
             throw new InvalidArgumentException('Pass at least one URL in $urls or one podcast feed in $feedUrls');
@@ -129,92 +310,49 @@ final class Client
             }
         }
 
-        $run = $this->startRun($input);
-        $run = $this->awaitRun($run);
-
-        return $this->fetchTranscripts($this->datasetId($run));
+        return $input;
     }
 
     /**
-     * @param  array<string, mixed>  $input
-     * @return array<mixed>
+     * @param  int|null  $waitForFinish  Let Apify hold the request open for up to this many seconds.
      */
-    private function startRun(array $input): array
+    private function fetchRun(string $runId, ?int $waitForFinish = null): Run
     {
-        $actor = str_replace('/', '~', $this->config->actorId);
-        $options = ['json' => $input];
+        $options = $waitForFinish === null ? [] : ['query' => ['waitForFinish' => $waitForFinish]];
 
-        if ($this->config->runTimeout !== null) {
-            $options['query'] = ['timeout' => $this->config->runTimeout];
-        }
-
-        $result = $this->request('POST', "/acts/{$actor}/runs", $options);
-
-        return $this->runData($result);
+        return $this->parseRun($this->request('GET', '/actor-runs/'.rawurlencode($runId), $options));
     }
 
     /**
-     * @param  array<mixed>  $run
-     * @return array<mixed>
+     * @param  array<mixed>  $result
      */
-    private function awaitRun(array $run): array
+    private function parseRun(array $result): Run
     {
-        $deadline = time() + $this->config->timeout;
+        $data = $this->runData($result);
 
-        while (true) {
-            $status = $run['status'] ?? null;
-
-            if ($status === 'SUCCEEDED') {
-                return $run;
-            }
-
-            if (is_string($status) && in_array($status, self::FAILED_STATUSES, true)) {
-                throw new ApiException("Actor run ended with status {$status}");
-            }
-
-            if (! is_string($status) || ! in_array($status, self::RUNNING_STATUSES, true)) {
-                throw new ApiException('Invalid API response: missing or unknown run status');
-            }
-
-            $remaining = $deadline - time();
-
-            if ($remaining <= 0) {
-                throw new ApiException("Actor run did not finish within {$this->config->timeout} seconds");
-            }
-
-            $runId = $run['id'] ?? null;
-
-            if (! is_string($runId)) {
-                throw new ApiException('Invalid API response: missing run ID');
-            }
-
-            $result = $this->request('GET', "/actor-runs/{$runId}", [
-                'query' => ['waitForFinish' => min(self::MAX_WAIT_SECONDS, $remaining)],
-            ]);
-            $run = $this->runData($result);
-        }
-    }
-
-    /**
-     * @param  array<mixed>  $run
-     */
-    private function datasetId(array $run): string
-    {
-        $datasetId = $run['defaultDatasetId'] ?? null;
-
-        if (! is_string($datasetId) || $datasetId === '') {
-            throw new ApiException('Invalid API response: missing dataset ID');
+        if (! is_string($data['id'] ?? null) || $data['id'] === '') {
+            throw new ApiException('Invalid API response: missing run ID');
         }
 
-        return $datasetId;
+        $status = $data['status'] ?? null;
+
+        if (! is_string($status) || RunStatus::tryFrom($status) === null) {
+            throw new ApiException('Invalid API response: missing or unknown run status', 0, null, $data['id']);
+        }
+
+        try {
+            return Run::fromArray($data);
+        } catch (InvalidArgumentException $e) {
+            throw new ApiException('Invalid API response: '.$e->getMessage(), 0, $e, $data['id']);
+        }
     }
 
     /**
      * @return list<Transcript>
      */
-    private function fetchTranscripts(string $datasetId): array
+    private function fetchTranscripts(Run $run): array
     {
-        $items = $this->request('GET', "/datasets/{$datasetId}/items", ['query' => ['format' => 'json']]);
+        $items = $this->request('GET', "/datasets/{$run->defaultDatasetId}/items", ['query' => ['format' => 'json']]);
 
         $transcripts = [];
 
@@ -226,7 +364,12 @@ final class Client
 
                 $transcripts[] = Transcript::fromArray($item);
             } catch (InvalidArgumentException $e) {
-                throw new ApiException("Invalid dataset item at index {$index}: ".$e->getMessage(), 0, $e);
+                throw new ApiException(
+                    "Invalid dataset item at index {$index}: ".$e->getMessage(),
+                    0,
+                    $e,
+                    $run->id,
+                );
             }
         }
 

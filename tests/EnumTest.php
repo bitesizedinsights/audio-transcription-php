@@ -5,6 +5,7 @@ declare(strict_types=1);
 use AudioTranscription\DiarizationStatus;
 use AudioTranscription\ErrorCode;
 use AudioTranscription\Language;
+use AudioTranscription\RunStatus;
 use AudioTranscription\Sentiment;
 use AudioTranscription\SubtitleFormat;
 use AudioTranscription\TranscriptStatus;
@@ -39,4 +40,15 @@ test('language has auto plus 100 languages with unique values', function () {
         ->and(Language::from('de'))->toBe(Language::German)
         ->and(Language::from('yue'))->toBe(Language::Cantonese)
         ->and(Language::from('ht'))->toBe(Language::HaitianCreole);
+});
+
+test('run status knows which states are final', function () {
+    expect(RunStatus::Succeeded->isFinished())->toBeTrue()
+        ->and(RunStatus::Succeeded->isFailure())->toBeFalse()
+        ->and(RunStatus::Failed->isFailure())->toBeTrue()
+        ->and(RunStatus::Aborted->isFailure())->toBeTrue()
+        ->and(RunStatus::TimedOut->isFailure())->toBeTrue()
+        ->and(array_filter(RunStatus::cases(), static fn (RunStatus $s): bool => ! $s->isFinished()))
+        ->toHaveCount(4)
+        ->and(RunStatus::tryFrom('TIMING-OUT'))->toBe(RunStatus::TimingOut);
 });

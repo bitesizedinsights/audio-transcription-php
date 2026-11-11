@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 use AudioTranscription\DiarizationStatus;
+use AudioTranscription\DTO\Run;
 use AudioTranscription\DTO\Segment;
 use AudioTranscription\DTO\SentimentResult;
 use AudioTranscription\DTO\Summary;
 use AudioTranscription\DTO\Tags;
 use AudioTranscription\DTO\Transcript;
 use AudioTranscription\ErrorCode;
+use AudioTranscription\RunStatus;
 use AudioTranscription\Sentiment;
 use AudioTranscription\TranscriptStatus;
 
@@ -284,4 +286,29 @@ test('an unreadable episode date gives null instead of throwing', function () {
     $t = Transcript::fromArray([...loadFixture('transcript_minimal'), 'episode_published' => 'not a date']);
 
     expect($t->getEpisodePublishedAt())->toBeNull();
+});
+
+test('Run maps and restores an Apify run', function () {
+    $data = [
+        'id' => 'run1',
+        'status' => 'TIMING-OUT',
+        'defaultDatasetId' => 'ds1',
+        'startedAt' => '2026-11-11T10:00:00.000Z',
+        'finishedAt' => null,
+    ];
+
+    $run = Run::fromArray($data + ['extra' => 'ignored']);
+
+    expect($run->status)->toBe(RunStatus::TimingOut)
+        ->and($run->isFinished())->toBeFalse()
+        ->and($run->isSuccessful())->toBeFalse()
+        ->and($run->toArray())->toBe($data)
+        ->and(json_encode($run))->toBe(json_encode($data))
+        ->and(Run::fromArray($run->toArray()))->toEqual($run);
+});
+
+test('Run needs an id and a known status', function () {
+    expect(fn () => Run::fromArray(['status' => 'RUNNING']))->toThrow(InvalidArgumentException::class, "'id'")
+        ->and(fn () => Run::fromArray(['id' => 'r', 'status' => 'WEIRD']))
+        ->toThrow(InvalidArgumentException::class, 'unknown value');
 });

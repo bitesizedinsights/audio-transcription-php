@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use AudioTranscription\Client;
 use AudioTranscription\Config;
+use AudioTranscription\DTO\Run;
 use AudioTranscription\Exception\ApiException;
 use AudioTranscription\Exception\MissingApiKeyException;
 use AudioTranscription\Exception\RateLimitException;
 use AudioTranscription\Language;
+use AudioTranscription\RunStatus;
 use AudioTranscription\SubtitleFormat;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Psr7\Request;
@@ -436,4 +438,214 @@ test('the run timeout is sent as the timeout query of the run start only when se
     makeClient([runResponse(), jsonResponse(200, [])], $history)->transcribe(['https://example.com/a.mp3']);
 
     expect($history[0]['request']->getUri()->getQuery())->toBe('');
+});
+
+test('start returns the run at once without polling or reading the dataset', function () {
+    $history = [];
+    $client = makeClient([runResponse('RUNNING', 'run7', 'ds7')], $history);
+
+    $run = $client->start(['https://example.com/a.mp3'], language: Language::German);
+
+    expect($run)->toBeInstanceOf(Run::class)
+        ->and($run->id)->toBe('run7')
+        ->and($run->status)->toBe(RunStatus::Running)
+        ->and($run->defaultDatasetId)->toBe('ds7')
+        ->and($history)->toHaveCount(1)
+        ->and($history[0]['request']->getMethod())->toBe('POST')
+        ->and(sentBody($history[0]['request']))->toBe([
+            'urls' => ['https://example.com/a.mp3'],
+            'language' => 'de',
+            'maxMinutesPerFile' => 60,
+        ]);
+});
+
+test('start validates its input before any request', function () {
+    $history = [];
+    $client = makeClient([], $history);
+
+    expect(fn () => $client->start())->toThrow(InvalidArgumentException::class, 'at least one URL')
+        ->and(fn () => $client->start(feedUrls: ['https://f.example/x.xml'], maxEpisodesPerFeed: 51))
+        ->toThrow(InvalidArgumentException::class, 'between 1 and 50')
+        ->and($history)->toBe([]);
+});
+
+test('getRun reads the run once without waiting', function () {
+    $history = [];
+    $client = makeClient([jsonResponse(200, ['data' => [
+        'id' => 'run9',
+        'status' => 'SUCCEEDED',
+        'defaultDatasetId' => 'ds9',
+        'startedAt' => '2026-11-11T10:00:00.000Z',
+        'finishedAt' => '2026-11-11T10:05:00.000Z',
+    ]])], $history);
+
+    $run = $client->getRun('run9');
+
+    expect($run->isSuccessful())->toBeTrue()
+        ->and($run->startedAt)->toBe('2026-11-11T10:00:00.000Z')
+        ->and($run->finishedAt)->toBe('2026-11-11T10:05:00.000Z')
+        ->and($history)->toHaveCount(1)
+        ->and($history[0]['request']->getUri()->getPath())->toBe('/v2/actor-runs/run9')
+        ->and($history[0]['request']->getUri()->getQuery())->toBe('');
+});
+
+test('getRun rejects a response without a known status', function () {
+    expect(fn () => makeClient([jsonResponse(200, ['data' => ['id' => 'r', 'status' => 'WEIRD']])])->getRun('r'))
+        ->toThrow(ApiException::class, 'unknown run status');
+});
+
+test('wait polls a started run until it succeeds', function () {
+    $history = [];
+    $client = makeClient([runResponse('RUNNING', 'run5'), runResponse('SUCCEEDED', 'run5')], $history);
+    $started = new Run('run5', RunStatus::Ready);
+
+    $run = $client->wait($started);
+
+    expect($run->status)->toBe(RunStatus::Succeeded)
+        ->and($run->defaultDatasetId)->toBe('ds1')
+        ->and($history)->toHaveCount(2)
+        ->and($history[0]['request']->getUri()->getPath())->toBe('/v2/actor-runs/run5')
+        ->and($history[0]['request']->getUri()->getQuery())->toStartWith('waitForFinish=');
+});
+
+test('wait accepts a run id and returns a finished run without polling', function () {
+    $history = [];
+    $client = makeClient([runResponse('SUCCEEDED', 'run5')], $history);
+
+    expect($client->wait('run5')->isSuccessful())->toBeTrue()
+        ->and($history)->toHaveCount(1)
+        ->and($history[0]['request']->getUri()->getQuery())->toBe('');
+
+    $history = [];
+    $done = makeClient([], $history)->wait(new Run('run5', RunStatus::Succeeded, 'ds1'));
+
+    expect($done->id)->toBe('run5')
+        ->and($history)->toBe([]);
+});
+
+test('wait keeps polling while a run is aborting or timing out', function () {
+    $client = makeClient([runResponse('TIMING-OUT', 'r'), runResponse('ABORTING', 'r'), runResponse('ABORTED', 'r')]);
+
+    expect(fn () => $client->wait(new Run('r', RunStatus::Running)))
+        ->toThrow(ApiException::class, 'status ABORTED');
+});
+
+test('wait honours its own timeout and the exception carries the run id', function () {
+    $client = makeClient([], config: new Config(timeout: 600));
+
+    try {
+        $client->wait(new Run('run6', RunStatus::Running), timeout: 0);
+        $this->fail('Expected an ApiException');
+    } catch (ApiException $e) {
+        expect($e->getMessage())->toContain('did not finish within 0 seconds')
+            ->and($e->runId)->toBe('run6');
+    }
+});
+
+test('wait throws on a failed run and names the run id', function (string $status) {
+    $client = makeClient([runResponse($status, 'run8')]);
+
+    try {
+        $client->wait('run8');
+        $this->fail('Expected an ApiException');
+    } catch (ApiException $e) {
+        expect($e->getMessage())->toBe("Actor run ended with status {$status}")
+            ->and($e->runId)->toBe('run8');
+    }
+})->with(['FAILED', 'ABORTED', 'TIMED-OUT']);
+
+test('results reads the dataset of a successful run', function () {
+    $history = [];
+    $client = makeClient([jsonResponse(200, [loadFixture('transcript_full')])], $history);
+
+    $transcripts = $client->results(new Run('run1', RunStatus::Succeeded, 'ds1'));
+
+    expect($transcripts)->toHaveCount(1)
+        ->and($transcripts[0]->isSuccessful())->toBeTrue()
+        ->and($history)->toHaveCount(1)
+        ->and($history[0]['request']->getUri()->getPath())->toBe('/v2/datasets/ds1/items');
+});
+
+test('results accepts a run id and looks the run up first', function () {
+    $history = [];
+    $client = makeClient([runResponse('SUCCEEDED', 'run1', 'dsX'), jsonResponse(200, [])], $history);
+
+    expect($client->results('run1'))->toBe([])
+        ->and($history[0]['request']->getUri()->getPath())->toBe('/v2/actor-runs/run1')
+        ->and($history[1]['request']->getUri()->getPath())->toBe('/v2/datasets/dsX/items');
+});
+
+test('results refuses a run that has not succeeded', function (RunStatus $status) {
+    $history = [];
+    $client = makeClient([], $history);
+
+    try {
+        $client->results(new Run('run3', $status, 'ds1'));
+        $this->fail('Expected an ApiException');
+    } catch (ApiException $e) {
+        expect($e->getMessage())->toContain("status {$status->value}")->toContain('wait()')
+            ->and($e->runId)->toBe('run3')
+            ->and($history)->toBe([]);
+    }
+})->with([RunStatus::Ready, RunStatus::Running, RunStatus::Failed, RunStatus::Aborted]);
+
+test('results needs the dataset id and names the item index and run id of a bad item', function () {
+    expect(fn () => makeClient([])->results(new Run('run3', RunStatus::Succeeded)))
+        ->toThrow(ApiException::class, 'missing dataset ID');
+
+    try {
+        makeClient([jsonResponse(200, ['nope'])])->results(new Run('run3', RunStatus::Succeeded, 'ds1'));
+        $this->fail('Expected an ApiException');
+    } catch (ApiException $e) {
+        expect($e->getMessage())->toContain('index 0')
+            ->and($e->runId)->toBe('run3');
+    }
+});
+
+test('abort posts to the run and returns its new state', function () {
+    $history = [];
+    $client = makeClient([runResponse('ABORTING', 'run4')], $history);
+
+    $run = $client->abort(new Run('run4', RunStatus::Running));
+
+    expect($run->status)->toBe(RunStatus::Aborting)
+        ->and($history[0]['request']->getMethod())->toBe('POST')
+        ->and($history[0]['request']->getUri()->getPath())->toBe('/v2/actor-runs/run4/abort');
+
+    $history = [];
+    makeClient([runResponse('ABORTED', 'run4')], $history)->abort('run4');
+
+    expect($history[0]['request']->getUri()->getPath())->toBe('/v2/actor-runs/run4/abort');
+});
+
+test('start, wait and results work in separate steps like transcribe', function () {
+    $history = [];
+    $client = makeClient([
+        runResponse('READY', 'run2'),
+        runResponse('SUCCEEDED', 'run2'),
+        jsonResponse(200, [loadFixture('transcript_full')]),
+    ], $history);
+
+    $run = $client->start(['https://example.com/a.mp3']);
+    $transcripts = $client->results($client->wait($run));
+
+    expect($transcripts)->toHaveCount(1)
+        ->and(array_map(static fn (array $h): string => $h['request']->getMethod(), $history))
+        ->toBe(['POST', 'GET', 'GET']);
+});
+
+test('a run start is still not repeated after a 5xx', function () {
+    $history = [];
+    $client = makeClient([jsonResponse(500, ['error' => 'x']), runResponse()], $history, new Config(maxRetries: 3));
+
+    expect(fn () => $client->start(['https://example.com/a.mp3']))->toThrow(ApiException::class)
+        ->and($history)->toHaveCount(1);
+});
+
+test('abort is not repeated after a 5xx either', function () {
+    $history = [];
+    $client = makeClient([jsonResponse(500, ['error' => 'x']), runResponse()], $history, new Config(maxRetries: 3));
+
+    expect(fn () => $client->abort('run4'))->toThrow(ApiException::class)
+        ->and($history)->toHaveCount(1);
 });

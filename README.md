@@ -215,6 +215,29 @@ $restored = Transcript::fromArray(json_decode($json, true)); // same data again
 
 An unknown sentiment label from the service is read as `null` and stored as an empty string.
 
+## Start Now, Collect Later: Run Handles
+
+`transcribe()` blocks until the transcripts are ready. For long recordings, queue jobs or web requests, split it into steps: `start()` returns as soon as the run is created and the work continues on Apify, so you can store the run ID and collect the transcripts later, even from another process.
+
+```php
+$run = $client->start(['https://example.com/podcast.mp3'], diarize: true);   // returns at once
+$runId = $run->id;                                                          // store it
+
+// later, in the same or another process
+$run = $client->wait($runId);            // polls until the run succeeded (or throws)
+$transcripts = $client->results($run);   // the same list<Transcript> as transcribe()
+```
+
+| Method | Purpose |
+| --- | --- |
+| `start(...)` | Same arguments as `transcribe()`. Starts the run and returns a `Run`. |
+| `getRun(string $runId)` | Looks the run up once, without waiting. Check `$run->status` (`RunStatus`) and `$run->isFinished()`. |
+| `wait(Run\|string $run, ?int $timeout = null)` | Polls until the run succeeded. Throws `ApiException` when it ends as `FAILED`, `ABORTED` or `TIMED-OUT` or does not finish within `$timeout` seconds (default `Config::$timeout`). |
+| `results(Run\|string $run)` | Reads the transcripts of a succeeded run. Throws `ApiException` for any other status, so call `wait()` first. |
+| `abort(Run\|string $run)` | Asks Apify to stop the run and returns it in its new state. |
+
+`transcribe()` is `results(wait(start(...)))`. `Run` has `id`, `status`, `defaultDatasetId`, `startedAt` and `finishedAt`, implements `JsonSerializable` and has `toArray()`/`fromArray()`. `ApiException::$runId` holds the run the error belongs to, when known.
+
 ## Language, Subtitle and Status Enums
 
 | Enum | Values |
@@ -225,6 +248,7 @@ An unknown sentiment label from the service is read as `null` and stored as an e
 | `DiarizationStatus` | `Ok`, `SkippedTime`, `Failed` |
 | `ErrorCode` | `BlockedUrl`, `DownloadFailed`, `TooLarge`, `UnsupportedFormat`, `InvalidMedia`, `NoAudio`, `TooLong`, `NoSpeech`, `TranscriptionFailed`, `ServiceUnavailable`, `RunTimeLimit`, `InvalidFeed`, `NoEpisodes` |
 | `Sentiment` | `Positive`, `Neutral`, `Negative` |
+| `RunStatus` | `Ready`, `Running`, `Succeeded`, `Failed`, `Aborting`, `Aborted`, `TimingOut`, `TimedOut` |
 
 ## Configure Timeouts and the Apify Actor
 
@@ -268,7 +292,7 @@ Failed requests are retried automatically, by default up to 3 times with exponen
 
 - **Rate limits (429):** retried after at least the `Retry-After` time. If the server asks for more than `retryMaxDelay`, a `RateLimitException` is thrown right away.
 - **Server errors (5xx) and connection failures:** retried for reading results and polling.
-- **Starting a run:** only retried after a 429 or a failed connection. After a 5xx or a timeout the run may already exist, and a repeat would be billed twice, so the error is thrown instead.
+- **Starting a run** (`start()`, also `abort()`): only retried after a 429 or a failed connection. After a 5xx or a timeout the run may already exist, and a repeat would be billed twice, so the error is thrown instead.
 - **Other errors (4xx):** never retried.
 
 ```php
