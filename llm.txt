@@ -17,7 +17,7 @@ Key facts:
 ## API
 - `Client::__construct(?Config $config = null, ?GuzzleHttp\ClientInterface $http = null)`
 - `Client::setApifyKey(string $apiKey): static` - sets the Apify API key; without it `APIFY_API_TOKEN` or `APIFY_TOKEN` is read from the environment, and `MissingApiKeyException` is thrown on the first API call if neither is set
-- `Client::transcribe(array $urls, Language $language = Language::Auto, bool $translateToEnglish = false, array $subtitleFormats = [], bool $diarize = false, ?int $numSpeakers = null, int $maxMinutesPerFile = 60, bool $withSummary = false, bool $withTags = false, bool $with5w1h = false, bool $withSentiment = false): Transcript[]` - starts one run for all URLs (1-100), waits for it, returns one Transcript per URL
+- `Client::transcribe(array $urls = [], Language $language = Language::Auto, bool $translateToEnglish = false, array $subtitleFormats = [], bool $diarize = false, ?int $numSpeakers = null, int $maxMinutesPerFile = 60, bool $withSummary = false, bool $withTags = false, bool $with5w1h = false, bool $withSentiment = false, array $feedUrls = [], int $maxEpisodesPerFeed = 5): Transcript[]` - starts one run for all URLs (1-100, links and feed episodes together at most 100), waits for it, returns one Transcript per URL
 - `Client::start(...same arguments as transcribe()): Run` - starts the run and returns at once; `getRun(string $runId): Run` - one lookup; `wait(Run|string $run, ?int $timeout = null): Run` - polls until SUCCEEDED, throws ApiException on FAILED/ABORTED/TIMED-OUT or timeout (default Config::$timeout), keeps polling on ABORTING/TIMING-OUT; `results(Run|string $run): Transcript[]` - dataset of a SUCCEEDED run, ApiException otherwise; `abort(Run|string $run): Run`; `transcribe()` is results(wait(start(...))); POST (start, abort) is retried only on 429 or a failed connection
 - `Config(string $actorId = 'bite-sized-insights/transcription', string $baseUrl = 'https://api.apify.com/v2', int $timeout = 600, int $requestTimeout = 90)`
 - DTOs (all `final readonly`, `fromArray(array)`):
@@ -30,9 +30,9 @@ Key facts:
 - Enums:
   - `Language`: Auto ('auto') plus 100 languages, e.g. English ('en'), German ('de'), Cantonese ('yue')
   - `SubtitleFormat`: Srt ('srt'), Vtt ('vtt')
-  - `TranscriptStatus`: Success, Partial, Failed
+  - `TranscriptStatus`: Success, Partial, Skipped, Failed
   - `DiarizationStatus`: Ok, SkippedTime, Failed
-  - `ErrorCode`: BlockedUrl, DownloadFailed, TooLarge, UnsupportedFormat, InvalidMedia, NoAudio, TooLong, NoSpeech, TranscriptionFailed, ServiceUnavailable
+  - `ErrorCode`: BlockedUrl, DownloadFailed, TooLarge, UnsupportedFormat, InvalidMedia, NoAudio, TooLong, NoSpeech, TranscriptionFailed, ServiceUnavailable, RunTimeLimit, InvalidFeed, NoEpisodes
   - `Sentiment`: Positive, Neutral, Negative
   - `RunStatus`: Ready, Running, Succeeded, Failed, Aborting, Aborted, TimingOut ('TIMING-OUT'), TimedOut ('TIMED-OUT'); isFinished(), isFailure()
 - Exceptions:
