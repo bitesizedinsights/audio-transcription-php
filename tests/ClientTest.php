@@ -98,6 +98,54 @@ test('optional input keys are omitted when unset', function () {
     ]);
 });
 
+test('a language code string is passed through trimmed', function (string $given, string $sent) {
+    $history = [];
+    $client = makeClient([runResponse(), jsonResponse(200, [])], $history);
+
+    $client->transcribe(['https://example.com/a.mp3'], language: $given);
+
+    expect(sentBody($history[0]['request'])['language'])->toBe($sent);
+})->with([
+    'regional code' => ['pt-BR', 'pt-BR'],
+    'plain code' => ['ja', 'ja'],
+    'padded' => ['  de ', 'de'],
+    'empty is auto' => ['', 'auto'],
+    'blank is auto' => ['   ', 'auto'],
+]);
+
+test('the Language enum still works, also with start()', function () {
+    $history = [];
+    $client = makeClient([runResponse(), runResponse(), jsonResponse(200, [])], $history);
+
+    $client->start(['https://example.com/a.mp3'], language: Language::Cantonese);
+    $client->start(['https://example.com/a.mp3'], language: Language::Auto);
+
+    expect(sentBody($history[0]['request'])['language'])->toBe('yue')
+        ->and(sentBody($history[1]['request'])['language'])->toBe('auto');
+});
+
+test('includeSegments is omitted by default and sent only when false', function () {
+    $history = [];
+    $client = makeClient([runResponse(), jsonResponse(200, []), runResponse(), runResponse()], $history);
+
+    $client->transcribe(['https://example.com/a.mp3']);
+    $client->start(['https://example.com/a.mp3'], includeSegments: false);
+    $client->start(['https://example.com/a.mp3'], includeSegments: true);
+
+    expect(sentBody($history[0]['request']))->not->toHaveKey('includeSegments')
+        ->and(sentBody($history[2]['request']))->toHaveKey('includeSegments', false)
+        ->and(sentBody($history[3]['request']))->not->toHaveKey('includeSegments');
+});
+
+test('includeSegments false works for feeds via transcribe()', function () {
+    $history = [];
+    $client = makeClient([runResponse(), jsonResponse(200, [])], $history);
+
+    $client->transcribe(feedUrls: ['https://example.com/feed.xml'], includeSegments: false);
+
+    expect(sentBody($history[0]['request']))->toHaveKey('includeSegments', false);
+});
+
 test('empty dataset gives an empty list', function () {
     $client = makeClient([runResponse(), jsonResponse(200, [])]);
 

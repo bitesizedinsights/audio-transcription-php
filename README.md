@@ -78,6 +78,7 @@ Apify bills per started audio minute that was transcribed:
 - Transcription: $0.01 per minute on the free plan, down to $0.007 on higher plans.
 - Add-ons (summary, tags, 5W1H, sentiment): from $0.0005 to $0.002 per minute each, only when enabled.
 - Speaker labels and translation to English: no extra charge.
+- Free plan: 6 runs in total, each transcribing 1 file of up to 10 minutes (60 minutes altogether). Console test runs have the same cap.
 
 A 30-minute podcast costs about $0.30, or about $0.39 with summary and tags. Files that fail and add-ons that fail are not billed. Current prices are on the [Actor page](https://apify.com/bite-sized-insights/transcription).
 
@@ -109,12 +110,22 @@ $transcripts = $client->transcribe(
     with5w1h: true,
     withSentiment: true,
 );
+
+// The language is a code string, so codes without a Language case work too
+$client->transcribe(['https://example.com/fado.mp3'], language: 'pt-BR');
+
+// Smaller rows: text and subtitles only, no segment list
+$client->transcribe(
+    ['https://example.com/talk.mp3'],
+    subtitleFormats: [SubtitleFormat::Srt],
+    includeSegments: false,
+);
 ```
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `urls` | `list<string>` | `[]` | Public http(s) links to audio or video files, up to 100, up to 300 MB each. Needed unless `feedUrls` is given |
-| `language` | `Language` | `Language::Auto` | Spoken language, or automatic detection |
+| `language` | `Language\|string` | `Language::Auto` | Language code such as `en`, `de` or `ja` (any string is passed on as given, trimmed; an empty string means `auto`), a `Language` case, or `auto` to detect it |
 | `translateToEnglish` | `bool` | `false` | Return the transcript translated into English |
 | `subtitleFormats` | `list<SubtitleFormat>` | `[]` | Also return subtitles as `srt` and/or `vtt` text |
 | `diarize` | `bool` | `false` | Label segments and subtitle cues with their speaker |
@@ -126,6 +137,7 @@ $transcripts = $client->transcribe(
 | `withSentiment` | `bool` | `false` | Add the overall sentiment |
 | `feedUrls` | `list<string>` | `[]` | RSS or Atom feeds of podcasts, up to 20. Their newest episodes are transcribed, see [Podcast Feeds](#podcast-feeds-time-limits-and-running-again) |
 | `maxEpisodesPerFeed` | `int` | `5` | Newest episodes per feed, 1 to 50. Links and episodes make at most 100 files per run |
+| `includeSegments` | `bool` | `true` | Return the timestamped segment list. `false` gives a smaller row with `text` and subtitles only and an empty `segments` list |
 
 ### Transcript Result: Text, Segments and Subtitles
 
@@ -242,7 +254,7 @@ $transcripts = $client->results($run);   // the same list<Transcript> as transcr
 
 | Enum | Values |
 |---|---|
-| `Language` | `Auto` plus 100 languages, for example `English` (`en`), `German` (`de`), `Cantonese` (`yue`) |
+| `Language` | Convenience for common codes: `Auto` plus named languages, for example `English` (`en`), `German` (`de`), `Cantonese` (`yue`). Optional, because `language` also accepts any code string such as `'ja'` |
 | `SubtitleFormat` | `Srt`, `Vtt` |
 | `TranscriptStatus` | `Success`, `Partial`, `Skipped`, `Failed` |
 | `DiarizationStatus` | `Ok`, `SkippedTime`, `Failed` |
@@ -382,7 +394,7 @@ Not directly. The Actor reads public http(s) links, so upload the file somewhere
 
 ### Which languages are supported?
 
-100 languages, or automatic detection with `Language::Auto`. Set a fixed `Language` for short or noisy clips.
+`language` is a code string such as `en`, `de` or `ja`, and `auto` (the default) detects it. The `Language` enum is a convenience for common codes: `language: Language::German` and `language: 'de'` are the same. Set a fixed language for short or noisy clips.
 
 ### How long can a recording be?
 
@@ -400,7 +412,7 @@ MP3, M4A/MP4, WAV, OGG/Opus, FLAC, AAC, WebM/MKV and more, as public http(s) lin
 
 ## Powered by
 
-This package is a thin client for the [Audio & Video Transcription Actor](https://apify.com/bite-sized-insights/transcription) on Apify. It supports 100 languages, files up to 300 MB, scheduled runs and API access from any language. New accounts include free monthly credit, [sign up](https://console.apify.com/sign-up) to get started.
+This package is a thin client for the [Audio & Video Transcription Actor](https://apify.com/bite-sized-insights/transcription) on Apify. It supports language detection or a language code, files up to 300 MB, scheduled runs and API access from any language. New accounts include free monthly credit, [sign up](https://console.apify.com/sign-up) to get started.
 
 ## License
 

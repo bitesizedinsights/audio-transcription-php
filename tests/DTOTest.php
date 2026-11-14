@@ -312,3 +312,19 @@ test('Run needs an id and a known status', function () {
         ->and(fn () => Run::fromArray(['id' => 'r', 'status' => 'WEIRD']))
         ->toThrow(InvalidArgumentException::class, 'unknown value');
 });
+
+test('successful transcript without segments (includeSegments off)', function () {
+    $data = loadFixture('transcript_full');
+    $data['segments'] = [];
+    $t = Transcript::fromArray($data);
+
+    expect($t->isSuccessful())->toBeTrue()
+        ->and($t->segments)->toBe([])
+        ->and($t->getSegmentCount())->toBe(0)
+        ->and($t->text)->not->toBeNull()
+        ->and($t->srt)->not->toBeNull()
+        ->and($t->chunks())->toBe([])
+        ->and($t->getTimestampedText())->toBe('')
+        ->and($t->toArray()['segments'])->toBe([])
+        ->and(Transcript::fromArray($t->toArray())->segments)->toBe([]);
+});

@@ -17,7 +17,7 @@ Key facts:
 ## API
 - `Client::__construct(?Config $config = null, ?GuzzleHttp\ClientInterface $http = null)`
 - `Client::setApifyKey(string $apiKey): static` - sets the Apify API key; without it `APIFY_API_TOKEN` or `APIFY_TOKEN` is read from the environment, and `MissingApiKeyException` is thrown on the first API call if neither is set
-- `Client::transcribe(array $urls = [], Language $language = Language::Auto, bool $translateToEnglish = false, array $subtitleFormats = [], bool $diarize = false, ?int $numSpeakers = null, int $maxMinutesPerFile = 60, bool $withSummary = false, bool $withTags = false, bool $with5w1h = false, bool $withSentiment = false, array $feedUrls = [], int $maxEpisodesPerFeed = 5): Transcript[]` - starts one run for all URLs (1-100, links and feed episodes together at most 100), waits for it, returns one Transcript per URL
+- `Client::transcribe(array $urls = [], Language|string $language = Language::Auto, bool $translateToEnglish = false, array $subtitleFormats = [], bool $diarize = false, ?int $numSpeakers = null, int $maxMinutesPerFile = 60, bool $withSummary = false, bool $withTags = false, bool $with5w1h = false, bool $withSentiment = false, array $feedUrls = [], int $maxEpisodesPerFeed = 5, bool $includeSegments = true): Transcript[]` - `$language` is a language code string such as 'en', 'de', 'ja', 'pt-BR' (trimmed; '' means 'auto') or a `Language` case; `$includeSegments = false` sends includeSegments=false and returns rows with text and subtitles but an empty `segments` list (smaller); starts one run for all URLs (1-100, links and feed episodes together at most 100), waits for it, returns one Transcript per URL
 - `Client::start(...same arguments as transcribe()): Run` - starts the run and returns at once; `getRun(string $runId): Run` - one lookup; `wait(Run|string $run, ?int $timeout = null): Run` - polls until SUCCEEDED, throws ApiException on FAILED/ABORTED/TIMED-OUT or timeout (default Config::$timeout), keeps polling on ABORTING/TIMING-OUT; `results(Run|string $run): Transcript[]` - dataset of a SUCCEEDED run, ApiException otherwise; `abort(Run|string $run): Run`; `transcribe()` is results(wait(start(...))); POST (start, abort) is retried only on 429 or a failed connection
 - `Config(string $actorId = 'bite-sized-insights/transcription', string $baseUrl = 'https://api.apify.com/v2', int $timeout = 600, int $requestTimeout = 90)`
 - DTOs (all `final readonly`, `fromArray(array)`):
@@ -28,7 +28,7 @@ Key facts:
   - `Tags`: tags: string[], count: int
   - `SentimentResult`: sentiment: ?Sentiment, confidence: ?float
 - Enums:
-  - `Language`: Auto ('auto') plus 100 languages, e.g. English ('en'), German ('de'), Cantonese ('yue')
+  - `Language`: convenience enum, Auto ('auto') plus named codes, e.g. English ('en'), German ('de'), Cantonese ('yue'); optional, because `language` also takes any code string such as 'en', 'de', 'ja'
   - `SubtitleFormat`: Srt ('srt'), Vtt ('vtt')
   - `TranscriptStatus`: Success, Partial, Skipped, Failed
   - `DiarizationStatus`: Ok, SkippedTime, Failed
@@ -39,6 +39,9 @@ Key facts:
   - `RateLimitException` (extends ApiException, has `retryAfter` seconds): HTTP 429
   - `ApiException` (has `?string $runId`): other HTTP errors, connection failures, malformed JSON, run status FAILED/ABORTED/TIMED-OUT, run not finished within Config::$timeout, missing dataset ID, unmappable dataset item (message names the index)
   - A file that cannot be transcribed does not throw; its Transcript has status Failed with errorCode and error
+
+## Limits
+- Free Apify plan: 6 runs in total, each transcribing 1 file of up to 10 minutes (60 minutes altogether); Console test runs have the same cap
 
 ## Example
 
@@ -52,7 +55,9 @@ $client = (new Client())->setApifyKey(getenv('APIFY_TOKEN'));
 
 $transcripts = $client->transcribe(
     urls: ['https://example.com/podcast.mp3'],
+    language: 'pt-BR', // any language code string such as en, de, ja; or a Language case
     subtitleFormats: [SubtitleFormat::Srt],
+    includeSegments: false, // optional: smaller rows without the segment list
 );
 
 foreach ($transcripts as $transcript) {

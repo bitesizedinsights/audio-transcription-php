@@ -58,7 +58,8 @@ final class Client
      * Transcribe audio or video files and return one result per URL.
      *
      * @param  list<string>  $urls  Public http(s) links, up to 100, up to 300 MB each. Needed unless `$feedUrls` is given.
-     * @param  Language  $language  Spoken language; `Language::Auto` detects it.
+     * @param  Language|string  $language  Language code such as `en`, `de` or `ja`, or a `Language` case; `auto` (or
+     *                                     an empty string) detects it.
      * @param  bool  $translateToEnglish  Return the transcript translated into English.
      * @param  list<SubtitleFormat>  $subtitleFormats  Also return subtitles in these formats.
      * @param  bool  $diarize  Label segments and subtitle cues with their speaker.
@@ -70,6 +71,8 @@ final class Client
      * @param  bool  $withSentiment  Add the overall sentiment of each transcript.
      * @param  list<string>  $feedUrls  RSS or Atom feeds of podcasts, up to 20: their newest episodes are transcribed too.
      * @param  int  $maxEpisodesPerFeed  Newest episodes per feed, 1 to 50. Links and episodes make at most 100 files.
+     * @param  bool  $includeSegments  Return the timestamped segment list; off gives smaller rows with text and
+     *                                 subtitles only.
      * @return list<Transcript> One per file (and one failed row per feed that could not be read), links first.
      *
      * @throws InvalidArgumentException when neither `$urls` nor `$feedUrls` is given, or `$maxEpisodesPerFeed` is
@@ -79,7 +82,7 @@ final class Client
      */
     public function transcribe(
         array $urls = [],
-        Language $language = Language::Auto,
+        Language|string $language = Language::Auto,
         bool $translateToEnglish = false,
         array $subtitleFormats = [],
         bool $diarize = false,
@@ -91,6 +94,7 @@ final class Client
         bool $withSentiment = false,
         array $feedUrls = [],
         int $maxEpisodesPerFeed = 5,
+        bool $includeSegments = true,
     ): array {
         $run = $this->start(
             $urls,
@@ -106,6 +110,7 @@ final class Client
             $withSentiment,
             $feedUrls,
             $maxEpisodesPerFeed,
+            $includeSegments,
         );
 
         return $this->results($this->wait($run));
@@ -127,7 +132,7 @@ final class Client
      */
     public function start(
         array $urls = [],
-        Language $language = Language::Auto,
+        Language|string $language = Language::Auto,
         bool $translateToEnglish = false,
         array $subtitleFormats = [],
         bool $diarize = false,
@@ -139,6 +144,7 @@ final class Client
         bool $withSentiment = false,
         array $feedUrls = [],
         int $maxEpisodesPerFeed = 5,
+        bool $includeSegments = true,
     ): Run {
         $input = $this->buildInput(
             $urls,
@@ -154,6 +160,7 @@ final class Client
             $withSentiment,
             $feedUrls,
             $maxEpisodesPerFeed,
+            $includeSegments,
         );
 
         $actor = str_replace('/', '~', $this->config->actorId);
@@ -262,7 +269,7 @@ final class Client
      */
     private function buildInput(
         array $urls,
-        Language $language,
+        Language|string $language,
         bool $translateToEnglish,
         array $subtitleFormats,
         bool $diarize,
@@ -274,6 +281,7 @@ final class Client
         bool $withSentiment,
         array $feedUrls,
         int $maxEpisodesPerFeed,
+        bool $includeSegments,
     ): array {
         if ($urls === [] && $feedUrls === []) {
             throw new InvalidArgumentException('Pass at least one URL in $urls or one podcast feed in $feedUrls');
@@ -285,7 +293,7 @@ final class Client
 
         $input = $urls === [] ? [] : ['urls' => $urls];
         $input += [
-            'language' => $language->value,
+            'language' => $this->languageCode($language),
             'maxMinutesPerFile' => $maxMinutesPerFile,
         ];
 
@@ -302,6 +310,7 @@ final class Client
             'withSentiment' => $withSentiment ?: null,
             'feedUrls' => $feedUrls === [] ? null : $feedUrls,
             'maxEpisodesPerFeed' => $feedUrls === [] ? null : $maxEpisodesPerFeed,
+            'includeSegments' => $includeSegments ? null : false,
         ];
 
         foreach ($optional as $key => $value) {
@@ -311,6 +320,17 @@ final class Client
         }
 
         return $input;
+    }
+
+    private function languageCode(Language|string $language): string
+    {
+        if ($language instanceof Language) {
+            return $language->value;
+        }
+
+        $code = trim($language);
+
+        return $code === '' ? Language::Auto->value : $code;
     }
 
     /**

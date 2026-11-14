@@ -10,6 +10,9 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Added
 
+- `language` accepts `Language|string` in `transcribe()` and `start()`: any language code string such as `en`, `de`, `ja` or `pt-BR` is passed on (trimmed, an empty string means `auto`), the `Language` enum keeps working. The Actor takes a free-form language code, so the "100 languages" claim is gone from the docs.
+- `includeSegments` argument (default `true`) for `transcribe()` and `start()`: `false` returns smaller rows with `text` and subtitles but an empty `segments` list. It is only sent when `false`.
+- Docs: free-plan limits (6 runs in total, 1 file of up to 10 minutes each, Console test runs included).
 - Run handles for starting now and collecting later: `Client::start()` (arguments of `transcribe()`, returns a `Run` at once), `getRun()`, `wait()`, `results()` and `abort()`. `transcribe()` behaves as before and is `results(wait(start(...)))`. New `Run` DTO and `RunStatus` enum; `wait()` keeps polling while a run is `ABORTING` or `TIMING-OUT`. `ApiException::$runId` carries the run the error belongs to.
 - Podcast feeds: `Client::transcribe()` accepts `feedUrls` and `maxEpisodesPerFeed` (and `urls` may be omitted). `Transcript` gets `minutesCached`, `message`, `sourceFeed`, `episodeTitle`, `episodePublished`, `episodeGuid`, `isSkipped()`, `needsRerun()` and `getEpisodePublishedAt()`; `TranscriptStatus::Skipped` and `ErrorCode::RunTimeLimit`, `InvalidFeed`, `NoEpisodes`.
 - `Config::$runTimeout` sets Apify's time limit of the run (the Actor's default of 300 s is too short for feeds).
